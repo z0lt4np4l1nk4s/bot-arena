@@ -5,3 +5,4 @@ __pycache__/
 arena.db
 arena.log
 .vscode/
+.ruff_cache/

@@ -1,0 +1,5 @@
+# The application itself uses only the Python 3.10 standard library.
+# The packages below are development tools (linting, type checking).
+mypy==2.4.1
+pycodestyle==2.15.0
+ruff==0.17.4

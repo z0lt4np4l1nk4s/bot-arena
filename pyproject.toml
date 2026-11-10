@@ -1,0 +1,56 @@
+[project]
+name = "bot-arena"
+version = "0.1.0"
+description = "Write Python bots and watch them compete on a grid."
+requires-python = ">=3.10"
+
+# ---------------------------------------------------------------- ruff ----
+[tool.ruff]
+target-version = "py310"
+line-length = 79
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle (PEP 8)
+    "F",        # pyflakes: unused imports/variables, undefined names
+    "I",        # import sorting
+    "N",        # PEP 8 naming
+    "D",        # docstrings (PEP 257)
+    "ANN",      # type annotations on every function (PEP 484)
+    "UP",       # modern syntax for Python 3.10
+    "B",        # likely bugs
+    "C4",       # comprehensions
+    "SIM",      # simplifications
+    "PTH",      # pathlib instead of os.path
+    "RET",      # return statements
+    "PIE",      # misc. lint
+    "PL",       # pylint rules
+    "RUF",      # ruff-specific rules
+]
+ignore = [
+    "PLR2004",  # magic values in comparisons: too noisy for game rules
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "PLR0904"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------- mypy ----
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+mypy_path = "src"
+files = ["src", "tests"]
+
+# --------------------------------------------- Pylance / VS Code checker --
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+extraPaths = ["src"]
