@@ -10,6 +10,7 @@ This is the most complete example. Each turn it tries, in order:
 """
 
 from collections import deque
+from typing import Final
 
 from arena.api import (
     Action,
@@ -25,11 +26,12 @@ from arena.api import (
 from arena.bots.registry import register_builtin
 
 # How many of the opponent's recent positions to remember and avoid.
-TRAIL_LENGTH = 10
+TRAIL_LENGTH: Final = 10
 # Skip a crystal if the opponent is at least this many steps closer to it.
-OPPONENT_LEAD = 2
-# Which steps of the opponent's path to consider for a trap (1 = next step).
-TRAP_STEPS = range(1, 4)
+OPPONENT_LEAD: Final = 2
+# Which cells of the opponent's path to consider for a trap. Index 0 is
+# its next step, so these are the cells 2 to 4 steps ahead of it.
+TRAP_STEPS: Final = range(1, 4)
 
 
 @register_builtin

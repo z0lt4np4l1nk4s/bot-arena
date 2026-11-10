@@ -5,12 +5,13 @@ A good first example: it shows the shape every bot has (a ``name`` and a
 """
 
 import random
+from typing import Final
 
 from arena.api import Action, BotState, Direction
 from arena.bots.registry import register_builtin
 
 # Chance of shooting in a turn where shooting is allowed.
-SHOOT_CHANCE = 0.1
+SHOOT_CHANCE: Final = 0.1
 
 
 @register_builtin

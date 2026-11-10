@@ -5,10 +5,15 @@ the application, and lets a bot that hangs be killed and restarted. The
 process is started with *spawn* on every operating system, so it gets only
 picklable data (the bot's source, the logging settings) and creates the
 bot itself.
+
+At most one request is ever waiting in the pipe: while the bot is still
+busy with an older turn, it is not sent another one. This way the pipe can
+never fill up, and a slow bot never falls further and further behind.
 """
 
 import contextlib
 import multiprocessing
+import pickle
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -16,10 +21,11 @@ from multiprocessing.process import BaseProcess
 from types import TracebackType
 from typing import Final, Protocol
 
-from arena.bots.loader import error_line_in_file
+from arena.bots.loader import describe_error, error_line_in_file
 from arena.bots.source import BotSource
-from arena.errors import BotLoadError
-from arena.model.actions import Action
+from arena.errors import BotLoadError, InvalidActionError
+from arena.model.actions import MAX_MESSAGE_LENGTH, Action, ActionKind
+from arena.model.geometry import Direction, Position
 from arena.model.state import BotState
 from arena.rules import Rules
 from arena.utilities.decorators import Timed, log_exceptions, measure_time
@@ -27,8 +33,12 @@ from arena.utilities.logger import LogSettings, configure_logging, get_logger
 
 STARTUP_TIMEOUT_SECONDS: Final = 10.0
 JOIN_TIMEOUT_SECONDS: Final = 2.0
+PROCESS_ENDED: Final = "bot process ended"
 
-logger = get_logger("runtime")
+logger: Final = get_logger("runtime")
+
+# Errors that mean the pipe or the child process is gone or broken.
+_CHANNEL_ERRORS: Final = (EOFError, OSError, pickle.PickleError)
 
 
 class Pipe(Protocol):
@@ -83,15 +93,18 @@ class BotProcess:
         Args:
             source: Which bot to run.
             rules: Gives the time limit and the kill timeout.
-            log_settings: Logging for the child process.
+            log_settings: Logging for the child process; ``None`` leaves
+                the child's logging switched off.
         """
         self.source = source
         self.rules = rules
-        self.log_settings = log_settings or LogSettings()
+        self.log_settings = log_settings
         self.restarts = 0
+        self._started = False
         self._process: BaseProcess | None = None
         self._connection: Pipe | None = None
-        self._waiting_since: float | None = None
+        # When the request the bot is still working on was sent.
+        self._busy_since: float | None = None
 
     def __enter__(self) -> "BotProcess":
         """Start the bot when entering a ``with`` block."""
@@ -130,52 +143,123 @@ class BotProcess:
         process.start()
         child_end.close()
         self._process, self._connection = process, parent_end
-        if not parent_end.poll(STARTUP_TIMEOUT_SECONDS):
-            self.stop()
-            message = f"bot {self.source.name!r} did not start in time"
-            raise BotLoadError(message)
-        handshake = parent_end.recv()
-        if not isinstance(handshake, Handshake):
-            self.stop()
-            message = f"bot {self.source.name!r} sent no handshake"
-            raise BotLoadError(message)
+        self._busy_since = None
+        self._started = True
+        handshake = self._receive_handshake(parent_end)
         if handshake.error is not None:
-            self.stop()
+            self._discard_process()
             raise BotLoadError(handshake.error, handshake.line)
         logger.info("bot %s started", self.source.name)
 
     def ask(self, turn: int, state: BotState) -> BotReply:
         """Ask the bot for its action and wait at most the turn limit.
 
-        Answers for earlier turns that arrive late are thrown away. A bot
-        that has been silent for longer than the kill timeout is replaced
-        by a fresh one first.
+        A bot that is still busy with an older turn is not sent a new
+        request; if it does not finish in time, this turn times out. A bot
+        silent for longer than the kill timeout, or whose process ended,
+        is replaced by a fresh one.
 
         Args:
             turn: The turn number; the answer must carry the same number.
             state: What the bot sees.
 
         Returns:
-            The bot's reply, or a ``wait`` marked as timed out.
+            The bot's reply, or a ``wait`` marked as timed out or carrying
+            an error.
+
+        Raises:
+            RuntimeError: If :meth:`start` was never called.
         """
-        self._restart_if_hanging()
+        if not self._started:
+            message = "the bot process was never started; call start()"
+            raise RuntimeError(message)
+        limit_seconds = self.rules.turn_time_limit_ms / 1000
+        try:
+            connection = self._ready_connection()
+            # Counted only now, so restarting a bot does not eat its time.
+            deadline = time.monotonic() + limit_seconds
+            if self._busy_since is not None and not self._wait_until_idle(
+                connection, deadline
+            ):
+                return self._timed_out(turn)
+            connection.send((turn, state))
+            self._busy_since = time.monotonic()
+            reply = self._wait_for(connection, turn, deadline)
+        except _CHANNEL_ERRORS:
+            logger.error("bot %s: %s", self.source.name, PROCESS_ENDED)
+            self._discard_process()
+            return BotReply(turn, Action.wait(), 0.0, error=PROCESS_ENDED)
+        except BotLoadError as error:
+            logger.error(
+                "bot %s could not restart: %s", self.source.name, error
+            )
+            message = f"bot could not be restarted: {error}"
+            return BotReply(turn, Action.wait(), 0.0, error=message)
+        return reply if reply is not None else self._timed_out(turn)
+
+    def stop(self) -> None:
+        """Stop the child process; calling it again does nothing."""
+        connection = self._connection
+        if connection is not None and self._busy_since is None:
+            # The child may already be gone; then there is no one to tell.
+            with contextlib.suppress(*_CHANNEL_ERRORS):
+                connection.send(None)
+        if self._process is not None:
+            self._process.join(timeout=0.2)
+            logger.info("bot %s stopped", self.source.name)
+        self._discard_process()
+
+    def _ready_connection(self) -> Pipe:
+        """Return a working pipe, restarting the bot if it is needed."""
+        if self._connection is None:
+            self._restart()
         connection = self._require_connection()
-        sent_at = time.monotonic()
-        connection.send((turn, state))
-        if self._waiting_since is None:
-            self._waiting_since = sent_at
-        deadline = sent_at + self.rules.turn_time_limit_ms / 1000
+        self._collect_late_replies(connection)
+        if self._busy_since is not None:
+            silent_ms = (time.monotonic() - self._busy_since) * 1000
+            if silent_ms > self.rules.bot_kill_timeout_ms:
+                logger.info(
+                    "bot %s silent for %.0f ms, restarting",
+                    self.source.name,
+                    silent_ms,
+                )
+                self._restart()
+                connection = self._require_connection()
+        return connection
+
+    def _collect_late_replies(self, connection: Pipe) -> None:
+        """Read answers that arrived after their turn timed out."""
+        while connection.poll(0):
+            if isinstance(connection.recv(), BotReply):
+                self._busy_since = None
+
+    def _wait_until_idle(self, connection: Pipe, deadline: float) -> bool:
+        """Wait for the answer to an older turn; ``False`` if none came."""
         while (remaining := deadline - time.monotonic()) > 0:
             if not connection.poll(remaining):
-                break
+                return False
+            if isinstance(connection.recv(), BotReply):
+                self._busy_since = None
+                return True
+        return False
+
+    def _wait_for(
+        self, connection: Pipe, turn: int, deadline: float
+    ) -> BotReply | None:
+        """Wait for the answer to ``turn``; ``None`` if it is late."""
+        while (remaining := deadline - time.monotonic()) > 0:
+            if not connection.poll(remaining):
+                return None
             reply = connection.recv()
-            if isinstance(reply, BotReply) and reply.turn == turn:
-                self._waiting_since = None
-                self._log_reply(reply)
-                return reply
-            # A late answer for an older turn: the bot is alive again and
-            # is now working on this turn.
-            self._waiting_since = sent_at
+            if isinstance(reply, BotReply):
+                self._busy_since = None
+                if reply.turn == turn:
+                    self._log_reply(reply)
+                    return reply
+        return None
+
+    def _timed_out(self, turn: int) -> BotReply:
+        """A ``wait`` reply for a bot that did not answer in time."""
         logger.warning("bot %s timed out in turn %d", self.source.name, turn)
         return BotReply(
             turn,
@@ -184,44 +268,47 @@ class BotProcess:
             timed_out=True,
         )
 
-    def stop(self) -> None:
-        """Stop the child process; calling it again does nothing."""
+    def _restart(self) -> None:
+        """Replace the child process with a fresh one."""
+        self._discard_process()
+        self.start()
+        self.restarts += 1
+
+    def _discard_process(self) -> None:
+        """Close the pipe and make sure the child process is gone."""
         connection, process = self._connection, self._process
         self._connection = None
         self._process = None
+        self._busy_since = None
         if connection is not None:
-            # The child may already be gone; then there is no one to tell.
-            with contextlib.suppress(OSError):
-                connection.send(None)
             connection.close()
         if process is not None:
-            process.join(timeout=0.2)
             if process.is_alive():
                 process.terminate()
-                process.join(timeout=JOIN_TIMEOUT_SECONDS)
-            logger.info("bot %s stopped", self.source.name)
+            process.join(timeout=JOIN_TIMEOUT_SECONDS)
 
-    def _restart_if_hanging(self) -> None:
-        """Replace a bot that has not answered for the kill timeout."""
-        if self._waiting_since is None:
-            return
-        silent_ms = (time.monotonic() - self._waiting_since) * 1000
-        if silent_ms <= self.rules.bot_kill_timeout_ms:
-            return
-        logger.info(
-            "bot %s silent for %.0f ms, restarting",
-            self.source.name,
-            silent_ms,
-        )
-        self.stop()
-        self._waiting_since = None
-        self.start()
-        self.restarts += 1
+    def _receive_handshake(self, connection: Pipe) -> Handshake:
+        """Wait for the child's first message.
+
+        Raises:
+            BotLoadError: If the child does not answer in time, dies, or
+                sends something unexpected.
+        """
+        try:
+            ready = connection.poll(STARTUP_TIMEOUT_SECONDS)
+            handshake = connection.recv() if ready else None
+        except _CHANNEL_ERRORS:
+            handshake = None
+        if isinstance(handshake, Handshake):
+            return handshake
+        self._discard_process()
+        message = f"bot {self.source.name!r} did not start"
+        raise BotLoadError(message)
 
     def _require_connection(self) -> Pipe:
         """Return the pipe to the child, which must be running."""
         if self._connection is None:
-            message = "the bot process is not running; call start() first"
+            message = "the bot process is not running"
             raise RuntimeError(message)
         return self._connection
 
@@ -245,22 +332,22 @@ class BotProcess:
 
 @log_exceptions("runtime")
 def _run_bot(
-    source: BotSource, connection: Pipe, log_settings: LogSettings
+    source: BotSource, connection: Pipe, log_settings: LogSettings | None
 ) -> None:
     """Child process: create the bot, then answer until told to stop.
 
-    Requests are ``(turn, state)`` pairs; ``None`` means stop.
+    Requests are ``(turn, state)`` pairs; anything else means stop.
     """
-    configure_logging(log_settings)
+    if log_settings is not None:
+        configure_logging(log_settings)
     try:
         bot = source.create()
     except BotLoadError as error:
         connection.send(Handshake(error.reason, error.line))
         return
-    except Exception as error:  # user code may raise anything
-        line = _line_in_bot(error, source)
-        reason = f"{type(error).__name__}: {error}"
-        connection.send(Handshake(reason, line))
+    # User code may raise anything, including SystemExit from sys.exit().
+    except (Exception, SystemExit) as error:
+        connection.send(Handshake(describe_error(error), _line(error, source)))
         return
     connection.send(Handshake())
     decide = measure_time(bot.decide)
@@ -284,20 +371,83 @@ def _answer(
     """Call the bot once and turn any problem into a ``wait`` reply."""
     try:
         timed = decide(state)
-    except Exception as error:  # user code may raise anything
-        line = _line_in_bot(error, source)
+    # User code may raise anything, including SystemExit from sys.exit().
+    except (Exception, SystemExit) as error:
+        line = _line(error, source)
         suffix = "" if line is None else f" (line {line})"
-        message = f"{type(error).__name__}: {error}{suffix}"
+        message = f"{describe_error(error)}{suffix}"
         return BotReply(turn, Action.wait(), 0.0, error=message)
-    # Typed as Action, but the bot is untrusted code and may return anything.
-    value: object = timed.value
+    try:
+        action = rebuild_action(timed.value)
+    except InvalidActionError as error:
+        return BotReply(
+            turn, Action.wait(), timed.elapsed_ms, error=str(error)
+        )
+    return BotReply(turn, action, timed.elapsed_ms)
+
+
+def rebuild_action(value: object) -> Action:
+    """Build a fresh, validated :class:`Action` from what a bot returned.
+
+    A bot may return a subclass, or change an action after creating it.
+    Copying the fields into a new plain ``Action`` runs all checks again,
+    shortens the message and makes sure the result can be pickled.
+
+    Args:
+        value: Whatever ``decide`` returned.
+
+    Returns:
+        A plain, valid action.
+
+    Raises:
+        InvalidActionError: If ``value`` is not a usable action.
+
+    >>> rebuild_action(Action.wait("hi"))
+    Action(kind=<ActionKind.WAIT: 'wait'>, direction=None, message='hi', \
+target=None)
+    """
     if not isinstance(value, Action):
         message = f"decide() must return an Action, got {type(value).__name__}"
-        return BotReply(turn, Action.wait(), timed.elapsed_ms, error=message)
-    return BotReply(turn, value, timed.elapsed_ms)
+        raise InvalidActionError(message)
+    # Read as plain objects: the declared types cannot be trusted here.
+    kind: object = value.kind
+    direction: object = value.direction
+    message_text: object = value.message
+    target: object = value.target
+    if type(kind) is not ActionKind:
+        message = "invalid action: unknown kind"
+        raise InvalidActionError(message)
+    if direction is not None and type(direction) is not Direction:
+        message = "invalid action: direction must be a Direction"
+        raise InvalidActionError(message)
+    if not isinstance(message_text, str):
+        message = "invalid action: message must be a string"
+        raise InvalidActionError(message)
+    return Action(
+        kind,
+        direction,
+        str(message_text)[:MAX_MESSAGE_LENGTH],
+        _plain_position(target),
+    )
 
 
-def _line_in_bot(error: BaseException, source: BotSource) -> int | None:
+def _plain_position(target: object) -> Position | None:
+    """Copy a trap target into a plain :class:`Position`."""
+    if target is None:
+        return None
+    x = getattr(target, "x", None)
+    y = getattr(target, "y", None)
+    if (
+        not isinstance(target, Position)
+        or type(x) is not int
+        or type(y) is not int
+    ):
+        message = "invalid action: target must be a Position"
+        raise InvalidActionError(message)
+    return Position(x, y)
+
+
+def _line(error: BaseException, source: BotSource) -> int | None:
     """The line in the bot's own file where ``error`` happened, if any."""
     if source.path is None:
         return None

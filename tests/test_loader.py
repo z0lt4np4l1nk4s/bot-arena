@@ -94,6 +94,18 @@ class LoadBotClassTest(unittest.TestCase):
         second = load_bot_class(self.write(second_source, "second.py"))
         self.assertIsNot(first, second)
 
+    def test_dataclass_with_future_annotations_loads(self) -> None:
+        source = (
+            "from __future__ import annotations\n\n"
+            "from dataclasses import dataclass\n\n"
+            "@dataclass\nclass Memory:\n    seen: int = 0\n\n" + GOOD_BOT
+        )
+        self.assertEqual(load_bot_class(self.write(source)).__name__, "MyBot")
+
+    def test_exit_at_import_is_a_load_error(self) -> None:
+        error = self.load_error("import sys\nsys.exit(3)\n")
+        self.assertIn("SystemExit", str(error))
+
     def test_missing_file_is_a_load_error(self) -> None:
         with self.assertRaises(BotLoadError):
             load_bot_class(self.folder / "missing.py")

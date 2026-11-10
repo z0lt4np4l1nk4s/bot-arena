@@ -183,11 +183,11 @@ class MyBot:
         return Action.wait()
 ```
 
-API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, `Action.trap(position)` and `Action.wait()`, each with an optional `message=`. The directions are `Direction.UP/DOWN/LEFT/RIGHT`. The state is `BotState` with the fields `turn`, `max_turns`, `mode`, `map`, `crystals`, `me`, `opponent` and `events`. The helper functions are `distance`, `shortest_path` and `next_step`.
+API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, `Action.trap(position)` and `Action.wait()`, each with an optional `message=`. The directions are `Direction.UP/DOWN/LEFT/RIGHT`. The state is `BotState` with the fields `turn`, `max_turns`, `mode`, `map`, `crystals`, `me`, `opponent` and `events`. The helper functions are `distance`, `distances_from`, `shortest_path`, `next_step` and `bullet_path`.
 
 - The bot is an instance that **lives for the whole match**, so it can remember things between turns.
 - A file may contain only one class that satisfies the protocol. If there are several or none, it is a loading error.
-- `arena.api` is the only application module a bot may use. It exposes `Action`, `Direction`, `BotState`, `Position`, `Rules` and helper functions (`distance`, `shortest_path`, `next_step`), to make writing a bot pleasant.
+- `arena.api` is the only application module a bot may use. It exposes `Action`, `Direction`, `BotState`, `Position`, `Rules` and helper functions (`distance`, `distances_from`, `shortest_path`, `next_step`, `bullet_path`), to make writing a bot pleasant.
 
 ### 6.2 What the bot sees (`BotState`, immutable)
 - `turn`, `max_turns`, `mode` (duel or solo)

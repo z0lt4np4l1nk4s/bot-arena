@@ -10,6 +10,8 @@ memoized :func:`distances_from` and :func:`shortest_path` (with
 """
 
 from collections import deque
+from collections.abc import Mapping
+from types import MappingProxyType
 
 from arena.engine.turn import bullet_path
 from arena.map_generator.paths import bfs_distances
@@ -61,12 +63,14 @@ def distance(a: Position, b: Position) -> int:
 
 
 @memoize
-def distances_from(game_map: GameMap, start: Position) -> dict[Position, int]:
+def distances_from(
+    game_map: GameMap, start: Position
+) -> Mapping[Position, int]:
     """Return the walking distance from ``start`` to every reachable cell.
 
     One search gives the distance to all cells at once, which is much
     faster than many separate :func:`shortest_path` calls. Cached per map
-    and start cell. Do not change the returned dictionary.
+    and start cell; the result is read-only because it is shared.
 
     Args:
         game_map: The map to walk on.
@@ -75,7 +79,7 @@ def distances_from(game_map: GameMap, start: Position) -> dict[Position, int]:
     Returns:
         Every reachable cell mapped to its number of steps.
     """
-    return bfs_distances(game_map, start)
+    return MappingProxyType(bfs_distances(game_map, start))
 
 
 @memoize

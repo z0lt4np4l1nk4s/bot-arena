@@ -1,5 +1,7 @@
 """Play whole matches in one process, for testing bot behaviour."""
 
+from collections.abc import Callable
+
 from arena.bots.protocol import Bot
 from arena.engine.modes import Duel
 from arena.model.side import Side
@@ -33,8 +35,17 @@ def play_duel(
     return state
 
 
-def wins(first: type[Bot], second: type[Bot], seeds: range) -> tuple[int, int]:
-    """Count wins of ``first`` and ``second`` over seeds and both sides.
+def wins(
+    first: Callable[[int], Bot],
+    second: Callable[[int], Bot],
+    seeds: range,
+) -> tuple[int, int]:
+    """Count wins of two bots over seeds, each seed with both sides.
+
+    Args:
+        first: Builds the first bot for a seed.
+        second: Builds the second bot for a seed.
+        seeds: The map seeds to play.
 
     Returns:
         ``(wins of first, wins of second)``; draws count for neither.
@@ -43,7 +54,10 @@ def wins(first: type[Bot], second: type[Bot], seeds: range) -> tuple[int, int]:
     first_wins = second_wins = 0
     for seed in seeds:
         for first_side in Side:
-            bots = {first_side: first(), first_side.opponent: second()}
+            bots = {
+                first_side: first(seed),
+                first_side.opponent: second(seed),
+            }
             final = play_duel(bots[Side.BLUE], bots[Side.RED], seed)
             winner = duel.winner(final)
             if winner is first_side:

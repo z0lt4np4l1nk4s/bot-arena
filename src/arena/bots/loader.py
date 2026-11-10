@@ -8,15 +8,16 @@ that looks like a bot is returned. Every problem becomes a
 import importlib.util
 import inspect
 import itertools
+import sys
 import traceback
 from pathlib import Path
 from types import ModuleType
-from typing import TypeGuard
+from typing import Final, TypeGuard
 
 from arena.bots.protocol import Bot
 from arena.errors import BotLoadError
 
-_module_numbers = itertools.count()
+_module_numbers: Final = itertools.count()
 
 
 def load_bot_class(path: Path) -> type[Bot]:
@@ -73,6 +74,24 @@ def error_line_in_file(error: BaseException, path: Path) -> int | None:
     return lines[-1] if lines else None
 
 
+def describe_error(error: BaseException) -> str:
+    """Return ``"Type: text"`` for an error, even if its text fails.
+
+    User code may raise exceptions whose ``__str__`` itself raises.
+
+    >>> describe_error(ValueError("bad value"))
+    'ValueError: bad value'
+    """
+    if isinstance(error, SyntaxError) and error.msg:
+        text = error.msg
+    else:
+        try:
+            text = str(error)
+        except Exception:
+            text = "<error text could not be shown>"
+    return f"{type(error).__name__}: {text}" if text else type(error).__name__
+
+
 def _import_file(path: Path) -> ModuleType:
     """Run the file as a new module with a unique name."""
     module_name = f"arena_user_bot_{next(_module_numbers)}"
@@ -81,23 +100,21 @@ def _import_file(path: Path) -> ModuleType:
         message = f"cannot load {path.name}"
         raise BotLoadError(message)
     module = importlib.util.module_from_spec(spec)
+    # Registered while it runs, as a normal import would be; features
+    # such as dataclasses look the module up by name.
+    sys.modules[module_name] = module
     try:
         spec.loader.exec_module(module)
     except FileNotFoundError as error:
+        sys.modules.pop(module_name, None)
         message = f"file not found: {path.name}"
         raise BotLoadError(message) from error
-    except Exception as error:
+    # User code may raise anything, including SystemExit from sys.exit().
+    except (Exception, SystemExit) as error:
+        sys.modules.pop(module_name, None)
         line = error_line_in_file(error, path)
-        message = f"{type(error).__name__}: {_short_message(error)}"
-        raise BotLoadError(message, line) from error
+        raise BotLoadError(describe_error(error), line) from error
     return module
-
-
-def _short_message(error: BaseException) -> str:
-    """The error text without the location a SyntaxError adds."""
-    if isinstance(error, SyntaxError) and error.msg:
-        return error.msg
-    return str(error)
 
 
 def _looks_like_bot(member: type) -> TypeGuard[type[Bot]]:
@@ -110,6 +127,6 @@ def _check_constructible(bot_class: type[Bot]) -> None:
     """Make sure the class can be created without arguments."""
     try:
         inspect.signature(bot_class).bind()
-    except TypeError as error:
+    except (TypeError, ValueError) as error:
         message = "bot class must be constructible without arguments"
         raise BotLoadError(message) from error

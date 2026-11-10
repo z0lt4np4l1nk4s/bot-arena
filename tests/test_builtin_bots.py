@@ -125,11 +125,17 @@ class HardBotTest(unittest.TestCase):
 
 class StrengthTest(unittest.TestCase):
     def test_medium_beats_easy(self) -> None:
-        medium, easy = wins(MediumBot, EasyBot, range(10))
+        medium, easy = wins(
+            lambda seed: MediumBot(),
+            lambda seed: EasyBot(random.Random(seed)),
+            range(10),
+        )
         self.assertGreaterEqual(medium, 16, (medium, easy))
 
     def test_hard_beats_medium(self) -> None:
-        hard, medium = wins(HardBot, MediumBot, range(10))
+        hard, medium = wins(
+            lambda seed: HardBot(), lambda seed: MediumBot(), range(10)
+        )
         self.assertGreater(hard, medium)
         self.assertGreaterEqual(hard, 12, (hard, medium))
 
