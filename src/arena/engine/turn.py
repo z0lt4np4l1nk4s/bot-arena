@@ -59,7 +59,7 @@ class _Turn:
     spent_traps: list[Trap]
     disabled: set[Side] = field(default_factory=set)
     may_shoot: set[Side] = field(default_factory=set)
-    moved: set[Side] = field(default_factory=set)
+    moved: list[Side] = field(default_factory=list)
     events: list[Event] = field(default_factory=list)
 
     @classmethod
@@ -162,7 +162,7 @@ def _move(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
         if any(_blocked_by(target, current, wanted, side, o) for o in others):
             continue
         final[side] = target
-        turn.moved.add(side)
+        turn.moved.append(side)
     for side, position in final.items():
         turn.players[side] = replace(turn.players[side], position=position)
 

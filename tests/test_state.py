@@ -46,6 +46,11 @@ class GameMapTest(unittest.TestCase):
         self.assertFalse(SMALL_MAP.is_walkable(Position(6, 0)))
         self.assertTrue(SMALL_MAP.is_walkable(Position(1, 1)))
 
+    def test_map_is_hashable(self) -> None:
+        self.assertEqual(
+            hash(SMALL_MAP), hash(GameMap(6, SMALL_MAP.walls, BASES))
+        )
+
     def test_base_of_each_side(self) -> None:
         self.assertEqual(SMALL_MAP.base_of(Side.RED), Position(5, 5))
 

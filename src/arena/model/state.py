@@ -6,7 +6,7 @@ creation.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from arena.model.geometry import Position
@@ -26,7 +26,9 @@ class GameMap:
 
     size: int
     walls: frozenset[Position]
-    bases: Mapping[Side, Position]
+    # A dict cannot be hashed; leaving it out of the hash keeps maps usable
+    # as cache keys, while equality still compares the bases.
+    bases: Mapping[Side, Position] = field(hash=False)
 
     def is_walkable(self, position: Position) -> bool:
         """Check whether a bot may stand on ``position``.

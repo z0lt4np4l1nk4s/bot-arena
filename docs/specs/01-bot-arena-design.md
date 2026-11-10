@@ -235,7 +235,7 @@ The implementer may change the layout if there is a good reason. The important s
 
 ### 7.3 Interfaces, Protocols, ABC
 - `Bot`: a `typing.Protocol` (`@runtime_checkable`). A user bot inherits nothing (structural typing).
-- `GameMode`: an `abc.ABC` with abstract methods (`setup_map`, `state_for_bot`, `is_over`, `winner`). The implementations are `Duel` and `Solo`.
+- `GameMode`: an `abc.ABC` with abstract methods (`setup_map`, `allows`, `winner`) and shared concrete methods (`state_for_bot`, `step`, `is_over`). The implementations are `Duel` and `Solo`; each registers itself by its kind, and `GameMode.create(kind)` builds one.
 - `MatchRepository`: an ABC with the implementations `SqliteMatchRepository` and `InMemoryMatchRepository` (for tests).
 - `MatchObserver`: a Protocol for event receivers (GUI, saving to the database).
 

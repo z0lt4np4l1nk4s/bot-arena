@@ -62,6 +62,24 @@ class BotViewTest(unittest.TestCase):
         self.assertEqual(view.map, state.map)
         self.assertEqual(view.me, state.player(Side.RED))
 
+    def test_opponent_refusals_are_hidden(self) -> None:
+        duel = Duel()
+        state = duel.setup_map(1)
+        state = duel.step(state, {Side.BLUE: Action.move(Direction.RIGHT)})
+        state = duel.step(state, {Side.BLUE: Action.trap()})
+        state = duel.step(state, {Side.BLUE: Action.trap()})
+        blue_view = duel.state_for_bot(state, Side.BLUE)
+        red_view = duel.state_for_bot(state, Side.RED)
+        self.assertEqual(len(blue_view.events), 1)
+        self.assertEqual(red_view.events, ())
+
+    def test_changing_the_view_does_not_change_the_game(self) -> None:
+        duel = Duel()
+        state = duel.setup_map(1)
+        view = duel.state_for_bot(state, Side.BLUE)
+        view.crystals.clear()  # type: ignore[attr-defined]
+        self.assertEqual(state.crystals_left, 16)
+
     def test_solo_bot_has_no_opponent(self) -> None:
         solo = Solo()
         state = solo.setup_map(1)

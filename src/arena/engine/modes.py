@@ -48,7 +48,7 @@ class GameMode(ABC):
         Args:
             rules: The rules every match of this mode uses.
         """
-        self.rules = rules
+        self.rules: Rules = rules
 
     @classmethod
     def create(
@@ -84,6 +84,11 @@ class GameMode(ABC):
     def state_for_bot(self, state: GameState, side: Side) -> BotState:
         """Return what ``side``'s bot may see: no opponent traps.
 
+        The opponent's refused actions are hidden too, because a refused
+        trap would reveal where its traps are or how many it has left.
+        The view gets its own copy of the crystals, so a bot cannot change
+        the game by changing what it sees.
+
         Args:
             state: The full game state.
             side: The bot that is about to decide.
@@ -97,11 +102,16 @@ class GameMode(ABC):
             max_turns=state.max_turns,
             mode=state.mode,
             map=state.map,
-            crystals=state.crystals,
+            crystals=dict(state.crystals),
             me=state.player(side),
             my_traps=tuple(t for t in state.traps if t.owner is side),
             opponent=None if opponent is None else OpponentView.of(opponent),
-            events=state.events,
+            events=tuple(
+                event
+                for event in state.events
+                if event.kind is not EventKind.ACTION_REFUSED
+                or event.side is side
+            ),
         )
 
     def step(

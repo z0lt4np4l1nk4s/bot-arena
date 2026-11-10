@@ -1,6 +1,7 @@
 """Tests for traps during turn resolution."""
 
 import unittest
+from dataclasses import replace
 
 from arena.engine.turn import resolve_turn
 from arena.model.actions import Action
@@ -50,10 +51,31 @@ class PlaceTrapTest(unittest.TestCase):
         self.assertEqual(after.player(Side.BLUE).free_traps, 2)
 
     def test_fourth_active_trap_is_refused(self) -> None:
-        state = with_player(picture(EMPTY, "..B..R"), Side.BLUE, free_traps=0)
-        after = play(state, Action.trap())
-        self.assertEqual(after.traps, ())
+        # With the default 5-turn lifetime the first trap expires before a
+        # bot that must move between traps can place a fourth one.
+        rules = Rules(grid_size=6, trap_lifetime=10)
+        state = picture(EMPTY, ".B...R")
+        for _ in range(3):
+            state = resolve_turn(state, {Side.BLUE: Action.trap()}, rules)
+            state = resolve_turn(state, {Side.BLUE: Action.move(RIGHT)}, rules)
+        self.assertEqual(len(state.traps), 3)
+        after = resolve_turn(state, {Side.BLUE: Action.trap()}, rules)
+        self.assertEqual(len(after.traps), 3)
         self.assertEqual(refusal_reasons(after), ["no free trap"])
+
+    def test_both_bots_trapped_in_one_turn_reported_in_side_order(
+        self,
+    ) -> None:
+        state = replace(
+            picture(EMPTY, ".B...R"),
+            traps=(
+                Trap(Side.RED, Position(2, 1), 5),
+                Trap(Side.BLUE, Position(4, 1), 5),
+            ),
+        )
+        after = play(state, Action.move(RIGHT), Action.move(LEFT))
+        trapped = [e.side for e in after.events if e.kind is EventKind.TRAPPED]
+        self.assertEqual(trapped, [Side.BLUE, Side.RED])
 
     def test_trap_on_base_is_refused(self) -> None:
         after = play(picture("B.....", ".....R"), Action.trap())

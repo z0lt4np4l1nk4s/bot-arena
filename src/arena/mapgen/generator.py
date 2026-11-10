@@ -11,7 +11,7 @@ from typing import Final
 
 from arena.errors import MapGenerationError
 from arena.mapgen.paths import bfs_distances
-from arena.model.geometry import Position
+from arena.model.geometry import Position, manhattan
 from arena.model.side import Side
 from arena.model.state import GameMap
 from arena.rules import Rules
@@ -62,7 +62,7 @@ def solo_crystals(
     return {
         cell: count
         for cell, count in crystals.items()
-        if _manhattan(cell, blue) < _manhattan(cell, red)
+        if manhattan(cell, blue) < manhattan(cell, red)
     }
 
 
@@ -151,11 +151,6 @@ def _protected_cells(
         for dy in (-1, 0, 1)
         if Position(base.x + dx, base.y + dy).is_inside(size)
     )
-
-
-def _manhattan(a: Position, b: Position) -> int:
-    """Orthogonal distance between two cells."""
-    return abs(a.x - b.x) + abs(a.y - b.y)
 
 
 def _order(cell: Position) -> tuple[int, int]:
