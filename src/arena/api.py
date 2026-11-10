@@ -5,11 +5,14 @@ A bot imports everything it needs from this module only::
     from arena.api import Action, BotState, Direction
 
 Besides the game types it offers two helpers: :func:`distance` and the
-memoized :func:`shortest_path` (with :func:`next_step` built on it).
+memoized :func:`distances_from` and :func:`shortest_path` (with
+:func:`next_step` built on it).
 """
 
 from collections import deque
 
+from arena.engine.turn import bullet_path
+from arena.map_generator.paths import bfs_distances
 from arena.model.actions import Action
 from arena.model.geometry import Direction, Position, manhattan
 from arena.model.side import Side
@@ -40,7 +43,9 @@ __all__ = [
     "Rules",
     "Side",
     "Trap",
+    "bullet_path",
     "distance",
+    "distances_from",
     "next_step",
     "shortest_path",
 ]
@@ -53,6 +58,24 @@ def distance(a: Position, b: Position) -> int:
     5
     """
     return manhattan(a, b)
+
+
+@memoize
+def distances_from(game_map: GameMap, start: Position) -> dict[Position, int]:
+    """Return the walking distance from ``start`` to every reachable cell.
+
+    One search gives the distance to all cells at once, which is much
+    faster than many separate :func:`shortest_path` calls. Cached per map
+    and start cell. Do not change the returned dictionary.
+
+    Args:
+        game_map: The map to walk on.
+        start: The cell to measure from.
+
+    Returns:
+        Every reachable cell mapped to its number of steps.
+    """
+    return bfs_distances(game_map, start)
 
 
 @memoize
@@ -103,10 +126,13 @@ def next_step(
     >>> next_step(open_map, Position(0, 0), Position(0, 2))
     <Direction.DOWN: (0, 1)>
     """
-    path = shortest_path(game_map, start, goal)
-    if not path:
+    # Distances *to* the goal are cached per goal, and a match has only a
+    # few goals (crystals and bases), so this stays fast every turn.
+    to_goal = distances_from(game_map, goal)
+    if start == goal or start not in to_goal:
         return None
-    first = path[0]
     return next(
-        direction for direction in Direction if start.moved(direction) == first
+        direction
+        for direction in Direction
+        if to_goal.get(start.moved(direction)) == to_goal[start] - 1
     )

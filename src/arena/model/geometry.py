@@ -38,7 +38,7 @@ class Direction(Enum):
         return Direction((-self.dx, -self.dy))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Position:
     """An immutable cell coordinate on the grid.
 
@@ -58,7 +58,8 @@ class Position:
         Returns:
             A new position; this one is left unchanged.
         """
-        return Position(self.x + direction.dx, self.y + direction.dy)
+        dx, dy = direction.value
+        return Position(self.x + dx, self.y + dy)
 
     def is_inside(self, size: int) -> bool:
         """Check whether the position lies on a square grid.
