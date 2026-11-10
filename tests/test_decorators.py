@@ -63,7 +63,7 @@ class MeasureTimeTest(unittest.TestCase):
 
 class LogExceptionsTest(unittest.TestCase):
     def test_log_exceptions_logs_traceback_and_reraises(self) -> None:
-        @log_exceptions("arena.test")
+        @log_exceptions("test")
         def divide(number: int) -> float:
             return 1 / number
 
@@ -77,7 +77,7 @@ class LogExceptionsTest(unittest.TestCase):
         self.assertIn("ZeroDivisionError", output)
 
     def test_log_exceptions_passes_results_through(self) -> None:
-        @log_exceptions("arena.test")
+        @log_exceptions("test")
         def double(number: int) -> int:
             return number * 2
 

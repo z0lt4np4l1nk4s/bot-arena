@@ -6,11 +6,12 @@ decorator that logs any exception before letting it propagate.
 """
 
 import functools
-import logging
 import time
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from typing import Generic, ParamSpec, Protocol, TypeVar
+
+from arena.utilities.logger import get_logger
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -96,17 +97,18 @@ def measure_time(function: Callable[P, R]) -> Callable[P, Timed[R]]:
 
 
 def log_exceptions(
-    logger_name: str,
+    component: str,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Log any exception raised by the decorated function, then re-raise.
 
     Args:
-        logger_name: The logger to write to, e.g. ``"arena.runtime"``.
+        component: The part of the application, e.g. ``"runtime"``;
+            the error goes to its logger (see :func:`get_logger`).
 
     Returns:
         The decorator.
     """
-    logger = logging.getLogger(logger_name)
+    logger = get_logger(component)
 
     def decorator(function: Callable[P, R]) -> Callable[P, R]:
         @functools.wraps(function)

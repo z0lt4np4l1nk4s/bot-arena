@@ -1,14 +1,15 @@
-"""Tests for the configurable logging levels."""
+"""Tests for the application logger and its settings."""
 
 import logging
 import tempfile
 import unittest
 from pathlib import Path
 
-from arena.utilities.logging_configuration import (
+from arena.utilities.logger import (
     LogLevel,
     LogSettings,
     configure_logging,
+    get_logger,
 )
 
 
@@ -17,7 +18,7 @@ class ConfigureLoggingTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.log_file = Path(directory.name) / "test.log"
-        self.logger = logging.getLogger("arena.example")
+        self.logger = get_logger("example")
 
     def tearDown(self) -> None:
         arena_logger = logging.getLogger("arena")
@@ -32,9 +33,12 @@ class ConfigureLoggingTest(unittest.TestCase):
             handler.flush()
         return self.log_file.read_text(encoding="utf-8")
 
-    def configure(self, level: LogLevel) -> None:
+    def configure(self, level: LogLevel, message_format: str = "") -> None:
         """Configure logging to the temporary file at ``level``."""
-        configure_logging(LogSettings(level, self.log_file))
+        settings = LogSettings(level, self.log_file)
+        if message_format:
+            settings = LogSettings(level, self.log_file, message_format)
+        configure_logging(settings)
 
     def test_warning_level_skips_info(self) -> None:
         self.configure(LogLevel.WARNING)
@@ -66,6 +70,14 @@ class ConfigureLoggingTest(unittest.TestCase):
             if isinstance(handler, logging.FileHandler)
         ]
         self.assertEqual(len(file_handlers), 1)
+
+    def test_custom_format_is_used(self) -> None:
+        self.configure(LogLevel.INFO, "[%(levelname)s] %(message)s")
+        self.logger.info("hello")
+        self.assertEqual(self.written().strip(), "[INFO] hello")
+
+    def test_get_logger_lives_under_arena(self) -> None:
+        self.assertEqual(self.logger.name, "arena.example")
 
     def test_default_settings(self) -> None:
         settings = LogSettings()
