@@ -15,6 +15,10 @@ from typing import Final
 ROOT_LOGGER_NAME: Final = "arena"
 DEFAULT_FORMAT: Final = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
+# Until configure_logging() runs, log records are dropped silently instead
+# of being printed to the console.
+logging.getLogger(ROOT_LOGGER_NAME).addHandler(logging.NullHandler())
+
 
 class LogLevel(Enum):
     """How much to log, from only errors to everything."""

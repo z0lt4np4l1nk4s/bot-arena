@@ -33,4 +33,5 @@ class BotLoadError(ArenaError):
         """
         suffix = f" (line {line})" if line is not None else ""
         super().__init__(f"{message}{suffix}")
+        self.reason = message
         self.line = line
