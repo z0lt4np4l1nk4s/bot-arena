@@ -10,7 +10,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
 
 from arena.model.actions import Action, ActionKind
-from arena.model.geometry import Direction, Position
+from arena.model.geometry import Direction, Position, manhattan
 from arena.model.side import Side
 from arena.model.state import (
     Event,
@@ -60,6 +60,7 @@ class _Turn:
     spent_traps: list[Trap]
     disabled: set[Side] = field(default_factory=set)
     may_shoot: set[Side] = field(default_factory=set)
+    may_trap: set[Side] = field(default_factory=set)
     moved: list[Side] = field(default_factory=list)
     events: list[Event] = field(default_factory=list)
 
@@ -79,11 +80,14 @@ class _Turn:
                 turn.disabled.add(side)
             if player.shoot_cooldown == 0:
                 turn.may_shoot.add(side)
+            if player.trap_cooldown == 0:
+                turn.may_trap.add(side)
             turn.players[side] = replace(
                 player,
                 stunned_turns=max(player.stunned_turns - 1, 0),
                 trapped_turns=max(player.trapped_turns - 1, 0),
                 shoot_cooldown=max(player.shoot_cooldown - 1, 0),
+                trap_cooldown=max(player.trap_cooldown - 1, 0),
             )
         return turn
 
@@ -124,30 +128,47 @@ def _choose_actions(
 
 
 def _place_traps(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
-    """Place requested traps on the bots' current cells (rules step 2)."""
+    """Place requested traps on their target cells (rules step 2)."""
     for side, action in chosen.items():
-        if action.kind is not ActionKind.TRAP:
+        if action.kind is not ActionKind.TRAP or action.target is None:
             continue
-        player = turn.players[side]
-        reason = _trap_refusal(turn, player)
+        reason = _trap_refusal(turn, side, action.target)
         if reason:
             turn.refuse(side, reason)
             continue
-        turn.traps.append(
-            Trap(side, player.position, turn.rules.trap_lifetime)
+        player = turn.players[side]
+        turn.traps.append(Trap(side, action.target, turn.rules.trap_lifetime))
+        turn.players[side] = replace(
+            player,
+            free_traps=player.free_traps - 1,
+            trap_cooldown=turn.rules.trap_cooldown,
         )
-        turn.players[side] = replace(player, free_traps=player.free_traps - 1)
 
 
-def _trap_refusal(turn: _Turn, player: PlayerState) -> str:
-    """Why ``player`` may not place a trap now; empty if it may."""
-    if player.free_traps == 0:
-        return "no free trap"
-    if player.position in turn.map.bases.values():
-        return "base"
-    if any(trap.position == player.position for trap in turn.traps):
-        return "trap already here"
-    return ""
+def _trap_refusal(turn: _Turn, side: Side, target: Position) -> str:
+    """Why ``side`` may not place a trap on ``target``; empty if it may."""
+    occupied = {player.position for player in turn.players.values()}
+    opponents = [
+        player.position
+        for other, player in turn.players.items()
+        if other is not side
+    ]
+    checks = [
+        (side not in turn.may_trap, "cooldown"),
+        (turn.players[side].free_traps == 0, "no free trap"),
+        (not turn.map.is_walkable(target), "not walkable"),
+        (target in turn.map.bases.values(), "base"),
+        (target in occupied, "occupied"),
+        (any(t.position == target for t in turn.traps), "trap already here"),
+        (
+            any(
+                manhattan(target, position) < turn.rules.trap_min_distance
+                for position in opponents
+            ),
+            "too close to opponent",
+        ),
+    ]
+    return next((reason for failed, reason in checks if failed), "")
 
 
 def _move(turn: _Turn, chosen: Mapping[Side, Action]) -> None:

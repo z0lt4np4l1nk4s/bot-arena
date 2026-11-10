@@ -7,8 +7,18 @@ from arena.engine.modes import Duel, GameMode, Solo
 from arena.model.actions import Action
 from arena.model.geometry import Direction, Position
 from arena.model.side import Side
-from arena.model.state import EventKind, ModeKind, OpponentView
+from arena.model.state import (
+    EventKind,
+    GameState,
+    ModeKind,
+    OpponentView,
+)
 from builders import with_player
+
+
+def free_cell(state: GameState) -> Position:
+    """A walkable cell away from both bots: the crystal nearest Blue."""
+    return min(state.crystals, key=lambda cell: cell.x + cell.y)
 
 
 class RegistryTest(unittest.TestCase):
@@ -47,7 +57,7 @@ class BotViewTest(unittest.TestCase):
         duel = Duel()
         state = duel.setup_map(1)
         state = duel.step(state, {Side.BLUE: Action.move(Direction.RIGHT)})
-        state = duel.step(state, {Side.BLUE: Action.trap()})
+        state = duel.step(state, {Side.BLUE: Action.trap(free_cell(state))})
         blue_view = duel.state_for_bot(state, Side.BLUE)
         red_view = duel.state_for_bot(state, Side.RED)
         self.assertEqual(len(blue_view.my_traps), 1)
@@ -66,8 +76,8 @@ class BotViewTest(unittest.TestCase):
         duel = Duel()
         state = duel.setup_map(1)
         state = duel.step(state, {Side.BLUE: Action.move(Direction.RIGHT)})
-        state = duel.step(state, {Side.BLUE: Action.trap()})
-        state = duel.step(state, {Side.BLUE: Action.trap()})
+        state = duel.step(state, {Side.BLUE: Action.trap(free_cell(state))})
+        state = duel.step(state, {Side.BLUE: Action.trap(free_cell(state))})
         blue_view = duel.state_for_bot(state, Side.BLUE)
         red_view = duel.state_for_bot(state, Side.RED)
         self.assertEqual(len(blue_view.events), 1)
@@ -94,7 +104,10 @@ class StepTest(unittest.TestCase):
     def test_solo_refuses_shoot_and_trap(self) -> None:
         solo = Solo()
         state = solo.setup_map(1)
-        for action in [Action.shoot(Direction.RIGHT), Action.trap()]:
+        for action in [
+            Action.shoot(Direction.RIGHT),
+            Action.trap(free_cell(state)),
+        ]:
             after = solo.step(state, {Side.BLUE: action})
             with self.subTest(action=action.kind):
                 self.assertEqual(after.traps, ())

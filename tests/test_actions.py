@@ -4,7 +4,7 @@ import unittest
 
 from arena.errors import InvalidActionError
 from arena.model.actions import MAX_MESSAGE_LENGTH, Action, ActionKind
-from arena.model.geometry import Direction
+from arena.model.geometry import Direction, Position
 from arena.model.side import Side
 
 
@@ -20,7 +20,7 @@ class ActionTest(unittest.TestCase):
         self.assertEqual(
             Action.shoot(Direction.LEFT).direction, Direction.LEFT
         )
-        self.assertEqual(Action.trap().kind, ActionKind.TRAP)
+        self.assertEqual(Action.trap(Position(3, 4)).target, Position(3, 4))
         self.assertEqual(Action.wait("idle").message, "idle")
 
     def test_move_without_direction_is_invalid(self) -> None:
@@ -37,7 +37,15 @@ class ActionTest(unittest.TestCase):
 
     def test_trap_with_direction_is_invalid(self) -> None:
         with self.assertRaises(InvalidActionError):
-            Action(ActionKind.TRAP, Direction.UP)
+            Action(ActionKind.TRAP, Direction.UP, target=Position(1, 1))
+
+    def test_trap_without_target_is_invalid(self) -> None:
+        with self.assertRaises(InvalidActionError):
+            Action(ActionKind.TRAP)
+
+    def test_move_with_target_is_invalid(self) -> None:
+        with self.assertRaises(InvalidActionError):
+            Action(ActionKind.MOVE, Direction.UP, target=Position(1, 1))
 
     def test_non_string_message_is_invalid(self) -> None:
         with self.assertRaises(InvalidActionError):

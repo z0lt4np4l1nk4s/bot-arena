@@ -87,7 +87,7 @@ In every turn both bots **simultaneously** receive their state and return one ac
 |---|---|
 | `move(direction)` | up / down / left / right by one cell |
 | `shoot(direction)` | a bullet in a straight line, see 4.4 |
-| `trap()` | place a hidden trap on the cell you are standing on |
+| `trap(position)` | place a hidden trap on any cell of the map (see 4.5) |
 | `wait()` | do nothing |
 
 Every action can carry an optional **message** (a string, e.g. `"going for crystal (5,7), 4 cells"`). The message is shown in the match viewer log.
@@ -101,11 +101,14 @@ Every action can carry an optional **message** (a string, e.g. `"going for cryst
 - If both bots shoot in the same turn, both bullets are resolved.
 
 ### 4.5 Traps
-- Every bot has **3 traps**: at most 3 can be active on the map at the same time. `trap()` places one on the current cell. It may not be placed on a base or on a cell that already has a trap. If the bot has no free trap, the action counts as `wait()` and a warning is written to the log.
-- **A trap lasts 5 turns** from placement. After that it disappears from the map and **returns to the bot**, so it can be placed again. The total number of traps in a match is unlimited; only the number of simultaneously active traps is limited.
+- `trap(position)` places a trap on **any cell of the map**; it takes the whole turn, so the bot does not move. The target must be walkable, not a base, not a cell with a bot, not a cell that already has a trap, and **at least 2 cells (Manhattan) away from the opponent**, so a trap cannot be dropped at its feet: the owner has to predict where the opponent will go.
+- After placing a trap there is a **cooldown of 8 turns** before the next one.
+- Every bot has **3 traps**: at most 3 can be active on the map at the same time.
+- **A trap lasts 25 turns** from placement. After that it disappears from the map and **returns to the bot**, so it can be placed again. The total number of traps in a match is unlimited; only the number of simultaneously active traps is limited (with a cooldown of 8, a third trap is placed while the first is still active).
+- A refused trap (any rule above broken) counts as `wait()`, and the reason is written to the log. Only the bot itself sees its refusals.
 - **The opponent does not see someone else's traps.** In its state a bot sees only its own traps, with the number of remaining turns for each.
 - A bot's own trap does not affect its owner.
-- When the opponent steps on a trap, it is stuck for 3 turns (cannot do anything) and the trap disappears. The trap returns to its owner when its 5 turns from placement run out, the same as if it had not been triggered. Both bots see that the trigger happened through the `events` field of the state (see 6.2).
+- When the opponent steps on a trap, it is stuck for 3 turns (cannot do anything) and the trap disappears. The trap returns to its owner when its 25 turns from placement run out, the same as if it had not been triggered. Both bots see that the trigger happened through the `events` field of the state (see 6.2).
 
 ### 4.6 End of match
 - A **Duel** ends after **200 turns** or when all crystals have been delivered. The bot with more delivered crystals wins. If they are equal, it is a draw.
@@ -119,7 +122,7 @@ Every action can carry an optional **message** (a string, e.g. `"going for cryst
 
 **Minor rules:** if a bot is stunned and trapped at the same time, the longer of the two durations applies (they do not add up). The shooting cooldown and trap durations keep counting down while the bot is stunned or trapped.
 
-All numbers (20×20, 15%, 16 crystals, carrying capacity 3, range 5, cooldown 5, stun 2, traps 3 / duration 5 / stuck 3, 200, 300, 100 ms) are kept in **one place** as the rules configuration (see 7.6), so they are easy to change.
+All numbers (20×20, 15%, 16 crystals, carrying capacity 3, range 5, cooldown 5, stun 2, traps 3 / duration 25 / cooldown 8 / minimum distance 2 / stuck 3, 200, 300, 100 ms) are kept in **one place** as the rules configuration (see 7.6), so they are easy to change.
 
 ---
 
@@ -180,7 +183,7 @@ class MyBot:
         return Action.wait()
 ```
 
-API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, `Action.trap()` and `Action.wait()`, each with an optional `message=`. The directions are `Direction.UP/DOWN/LEFT/RIGHT`. The state is `BotState` with the fields `turn`, `max_turns`, `mode`, `map`, `crystals`, `me`, `opponent` and `events`. The helper functions are `distance` and `shortest_path`.
+API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, `Action.trap(position)` and `Action.wait()`, each with an optional `message=`. The directions are `Direction.UP/DOWN/LEFT/RIGHT`. The state is `BotState` with the fields `turn`, `max_turns`, `mode`, `map`, `crystals`, `me`, `opponent` and `events`. The helper functions are `distance` and `shortest_path`.
 
 - The bot is an instance that **lives for the whole match**, so it can remember things between turns.
 - A file may contain only one class that satisfies the protocol. If there are several or none, it is a loading error.
@@ -190,14 +193,14 @@ API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, 
 - `turn`, `max_turns`, `mode` (duel or solo)
 - `map`: dimensions, walls, the position of both bases
 - `crystals`: positions of the crystals on the ground and the count on each cell
-- `me`: position, how many it carries, delivered, shooting cooldown, stunned/trapped (remaining turns), free traps, **my active traps** (position and remaining turns)
+- `me`: position, how many it carries, delivered, shooting cooldown, trap cooldown, stunned/trapped (remaining turns), free traps, **my active traps** (position and remaining turns)
 - `opponent` (`None` in solo): position, how many it carries, delivered, shooting cooldown, stunned/trapped. **Without its traps.**
 - `events`: what happened in the previous turn (a hit, stepping into a trap and whose it is, dropped crystals)
 
 ### 6.3 Built-in bots
 - **Easy:** a random valid move. Sometimes shoots randomly.
 - **Medium:** BFS to the nearest reachable crystal. When it is full or there are no crystals left, it goes home. It does not shoot or place traps. Its messages explain its goal.
-- **Hard:** picks a crystal by the ratio of value to distance, taking the opponent's distance into account. Shoots when it predicts the opponent will be in the line of fire. Places traps in narrow passages in front of its base or on the opponent's likely path. Avoids cells where the opponent has stood (a possible trap).
+- **Hard:** picks a crystal by the ratio of value to distance, taking the opponent's distance into account. Shoots when it predicts the opponent will be in the line of fire. Places traps in narrow passages in front of its base, on crystals the opponent is heading for, or on the opponent's likely path. Avoids cells where the opponent has stood (a possible trap).
 - All of them are thoroughly commented because they serve as examples.
 
 ---

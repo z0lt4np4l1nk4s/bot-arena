@@ -20,13 +20,15 @@ class RulesTest(unittest.TestCase):
                 rules.stun_turns,
                 rules.traps_per_bot,
                 rules.trap_lifetime,
+                rules.trap_cooldown,
+                rules.trap_min_distance,
                 rules.trap_stuck_turns,
                 rules.duel_max_turns,
                 rules.solo_max_turns,
                 rules.turn_time_limit_ms,
                 rules.bot_kill_timeout_ms,
             ),
-            (20, 15, 8, 3, 5, 5, 2, 3, 5, 3, 200, 300, 100, 2000),
+            (20, 15, 8, 3, 5, 5, 2, 3, 25, 8, 2, 3, 200, 300, 100, 2000),
         )
 
     def test_default_rules_instance_uses_defaults(self) -> None:

@@ -72,11 +72,14 @@ class PlayerStateTest(unittest.TestCase):
             (Side.RED, Position(4, 4), 2, 5),
         )
 
-    def test_opponent_view_hides_free_traps(self) -> None:
+    def test_opponent_view_hides_trap_information(self) -> None:
         view = OpponentView.of(
-            PlayerState(Side.RED, Position(5, 5), free_traps=2)
+            PlayerState(
+                Side.RED, Position(5, 5), free_traps=2, trap_cooldown=4
+            )
         )
         self.assertFalse(hasattr(view, "free_traps"))
+        self.assertFalse(hasattr(view, "trap_cooldown"))
 
 
 class GameStateTest(unittest.TestCase):

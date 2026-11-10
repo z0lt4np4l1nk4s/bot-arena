@@ -73,6 +73,7 @@ class PlayerState:
     stunned_turns: int = 0
     trapped_turns: int = 0
     free_traps: int = 0
+    trap_cooldown: int = 0
 
     @property
     def is_disabled(self) -> bool:
