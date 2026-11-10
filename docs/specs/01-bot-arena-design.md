@@ -80,7 +80,7 @@ In every turn both bots **simultaneously** receive their state and return one ac
 3. **Moves.** Moving into a wall or off the map means the bot stays in place. If both bots move to the same cell or swap cells, neither moves. A bot cannot enter the cell occupied by the opponent, unless the opponent leaves it in the same turn. **Two bots never share a cell.**
 4. **Traps:** a bot that stepped on an opponent's trap is stuck for **3 turns**, and the trap disappears.
 5. **Shooting** (based on the new positions, see 4.4).
-6. **Crystals:** a bot that **moves onto** a cell with crystals automatically picks up as many as it can carry (at most **3** in hand); standing still picks nothing up, so crystals dropped by a hit bot can be taken by the other bot. Stunned or trapped bots pick up and deliver nothing. A bot on **its own base** automatically delivers everything it carries. Delivered crystals are points.
+6. **Crystals:** a bot on a cell with crystals automatically picks up as many as it can carry (at most **3** in hand). Stunned or trapped bots pick up and deliver nothing. A bot on **its own base** automatically delivers everything it carries. Delivered crystals are points.
 
 ### 4.3 Actions
 | Action | Description |
@@ -96,7 +96,7 @@ Every action can carry an optional **message** (a string, e.g. `"going for cryst
 - The bullet travels from the shooter's cell in the given direction, **at most 5 cells**. **A wall stops it.**
 - Shooting takes the whole turn, so the bot does not move that turn.
 - A hit is checked **after the moves**: the shooter has to predict where the opponent will be.
-- The hit bot **drops all crystals it carries** on the cell it is standing on. They stay there and **anyone can pick them up**. In addition, it is **stunned for 2 turns**.
+- The hit bot **drops all crystals it carries**: they **scatter one per cell onto the nearest free cells** it could walk to (first the four neighbours up, down, left, right, then further out). They never land on a wall, outside the map or under the other bot; if there is no room at all, they stay on the hit bot's cell. **Anyone can pick them up.** In addition, the hit bot is **stunned for 2 turns**, which gives the shooter time to collect them.
 - After shooting there is a **cooldown of 5 turns** before the next shot, whether it hit or not.
 - If both bots shoot in the same turn, both bullets are resolved.
 

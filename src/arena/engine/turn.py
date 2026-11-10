@@ -5,7 +5,8 @@ function working on a private, mutable :class:`_Turn` scratchpad, which is
 turned back into an immutable :class:`GameState` at the end.
 """
 
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
 
 from arena.model.actions import Action, ActionKind
@@ -259,8 +260,7 @@ def _hit(turn: _Turn, side: Side) -> None:
     player = turn.players[side]
     turn.events.append(Event(EventKind.HIT, side, player.position))
     if player.carrying > 0:
-        on_ground = turn.crystals.get(player.position, 0)
-        _set_crystals(turn, player.position, on_ground + player.carrying)
+        _scatter(turn, side, player.carrying)
         turn.events.append(
             Event(
                 EventKind.CRYSTALS_DROPPED,
@@ -274,6 +274,47 @@ def _hit(turn: _Turn, side: Side) -> None:
         carrying=0,
         stunned_turns=max(player.stunned_turns, turn.rules.stun_turns),
     )
+
+
+def _scatter(turn: _Turn, side: Side, amount: int) -> None:
+    """Drop ``amount`` crystals one per cell on the nearest free cells.
+
+    The cells are found by walking outwards from the hit bot, so crystals
+    never land behind a wall, outside the map or under the other bot. If
+    there is no room at all, they stay on the hit bot's own cell.
+    """
+    start = turn.players[side].position
+    cells = _nearest_free_cells(turn, start, side)
+    for _ in range(amount):
+        cell = next(cells, start)
+        _set_crystals(turn, cell, turn.crystals.get(cell, 0) + 1)
+
+
+def _nearest_free_cells(
+    turn: _Turn, start: Position, side: Side
+) -> Iterator[Position]:
+    """Yield reachable cells around ``start``, nearest first.
+
+    Directions are tried in a fixed order, so the result never depends on
+    chance.
+    """
+    occupied = {
+        player.position
+        for other, player in turn.players.items()
+        if other is not side
+    }
+    seen = {start}
+    queue = deque([start])
+    while queue:
+        current = queue.popleft()
+        for direction in Direction:
+            cell = current.moved(direction)
+            if cell in seen or cell in occupied:
+                continue
+            seen.add(cell)
+            if turn.map.is_walkable(cell):
+                queue.append(cell)
+                yield cell
 
 
 def bullet_path(
@@ -313,13 +354,8 @@ def bullet_path(
 def _collect_crystals(turn: _Turn) -> None:
     """Pick up crystals, then deliver at the own base (rules step 6)."""
     for side, player in turn.players.items():
-        if turn.is_inactive(side):
-            continue
-        # Only a bot that enters a cell picks up its crystals, so crystals
-        # dropped by a hit bot can be taken by the other bot.
-        if side in turn.moved:
-            player = _pick_up(turn, player)  # noqa: PLW2901 - same bot
-        turn.players[side] = _deliver(turn, player)
+        if not turn.is_inactive(side):
+            turn.players[side] = _deliver(turn, _pick_up(turn, player))
 
 
 def _pick_up(turn: _Turn, player: PlayerState) -> PlayerState:

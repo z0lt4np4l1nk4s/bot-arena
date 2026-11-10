@@ -79,12 +79,16 @@ class ShootingTest(unittest.TestCase):
         after = play(picture(EMPTY, ".B..R....."), Action.shoot(RIGHT))
         self.assertEqual(after.player(Side.BLUE).position, Position(1, 1))
 
-    def test_hit_drops_carried_crystals_and_stuns(self) -> None:
+    def test_hit_scatters_carried_crystals_and_stuns(self) -> None:
         state = with_player(picture(EMPTY, ".B..R....."), Side.RED, carrying=3)
         after = play(state, Action.shoot(RIGHT))
         red = after.player(Side.RED)
         self.assertEqual((red.carrying, red.stunned_turns), (0, 2))
-        self.assertEqual(after.crystals, {Position(4, 1): 3})
+        # Up, down and left of the hit bot, one crystal each.
+        self.assertEqual(
+            after.crystals,
+            {Position(4, 0): 1, Position(4, 2): 1, Position(3, 1): 1},
+        )
         dropped = [
             event
             for event in after.events
@@ -92,26 +96,44 @@ class ShootingTest(unittest.TestCase):
         ]
         self.assertEqual(dropped[0].amount, 3)
 
+    def test_scattered_crystals_avoid_walls(self) -> None:
+        # Red stands in a corridor: walls above and below it.
+        rows = ["....#.....", ".B..R.....", "....#....."]
+        state = with_player(
+            make_state([*rows, *[EMPTY] * 7], rules=RULES),
+            Side.RED,
+            carrying=3,
+        )
+        after = play(state, Action.shoot(RIGHT))
+        self.assertEqual(
+            after.crystals,
+            {Position(3, 1): 1, Position(5, 1): 1, Position(3, 0): 1},
+        )
+
+    def test_scattered_crystals_skip_the_other_bot(self) -> None:
+        state = with_player(picture(EMPTY, ".BR......."), Side.RED, carrying=3)
+        after = play(state, Action.shoot(RIGHT))
+        self.assertNotIn(Position(1, 1), after.crystals)
+        self.assertEqual(sum(after.crystals.values()), 3)
+
     def test_hit_without_crystals_drops_nothing(self) -> None:
         after = play(picture(EMPTY, ".B..R....."), Action.shoot(RIGHT))
         self.assertNotIn(EventKind.CRYSTALS_DROPPED, kinds(after))
 
-    def test_hit_bot_does_not_repick_dropped_crystals(self) -> None:
+    def test_stunned_bot_does_not_collect_scattered_crystals(self) -> None:
         state = with_player(picture(EMPTY, ".B..R....."), Side.RED, carrying=3)
         state = play(state, Action.shoot(RIGHT))
-        for _ in range(3):
-            state = play(state)
+        state = play(state, red=Action.move(UP))
         self.assertEqual(state.player(Side.RED).carrying, 0)
-        self.assertEqual(state.crystals, {Position(4, 1): 3})
+        self.assertEqual(state.player(Side.RED).position, Position(4, 1))
 
-    def test_opponent_can_take_dropped_crystals(self) -> None:
+    def test_opponent_can_take_scattered_crystals(self) -> None:
         state = with_player(picture(EMPTY, ".BR......."), Side.RED, carrying=3)
         state = play(state, Action.shoot(RIGHT))
-        state = play(state)
-        state = play(state)
-        state = play(state, Action.move(RIGHT), Action.move(DOWN))
-        self.assertEqual(state.player(Side.BLUE).carrying, 3)
-        self.assertEqual(state.crystals, {})
+        state = play(state, Action.move(UP))
+        state = play(state, Action.move(RIGHT))
+        self.assertEqual(state.player(Side.BLUE).position, Position(2, 0))
+        self.assertEqual(state.player(Side.BLUE).carrying, 1)
 
     def test_cooldown_blocks_next_five_turns(self) -> None:
         state = play(picture(EMPTY, ".B......R."), Action.shoot(RIGHT))

@@ -171,13 +171,13 @@ class DisabledBotTest(unittest.TestCase):
         self.assertEqual(after.player(Side.BLUE).carrying, 0)
         self.assertEqual(after.crystals, {Position(1, 1): 2})
 
-    def test_standing_bot_does_not_pick_up_crystals_under_it(self) -> None:
+    def test_waiting_bot_picks_up_crystals_under_it(self) -> None:
         state = with_crystals(
             picture("......", ".B....", *EMPTY[2:]), {Position(1, 1): 2}
         )
         after = resolve_turn(state, {}, RULES)
-        self.assertEqual(after.player(Side.BLUE).carrying, 0)
-        self.assertEqual(after.crystals, {Position(1, 1): 2})
+        self.assertEqual(after.player(Side.BLUE).carrying, 2)
+        self.assertEqual(after.crystals, {})
 
     def test_bot_on_base_delivers_without_moving(self) -> None:
         state = with_player(
