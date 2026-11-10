@@ -27,6 +27,6 @@ paths:
 - Value objects are immutable: `@dataclass(frozen=True)`.
 - Small functions with one job. If a function needs comments to separate its sections, split it.
 - No global mutable state; configuration is passed in.
-- No `print` in library code; use `logging`.
+- No `print` in library code. Log only through `arena.utilities.logger.get_logger("<component>")`; never import `logging` anywhere else (levels, format and file are configured in that one module).
 - Catch specific exceptions only, never a bare `except:`. Project errors derive from `ArenaError`.
 - Advanced techniques (decorators, closures, protocols/ABCs, concurrency, design patterns, metaprogramming) are used where the design spec places them, never forced in elsewhere.

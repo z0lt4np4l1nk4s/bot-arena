@@ -19,3 +19,18 @@ class InvalidActionError(ArenaError):
 
 class MapGenerationError(ArenaError):
     """Raised when no valid map can be generated for the given rules."""
+
+
+class BotLoadError(ArenaError):
+    """Raised when a bot cannot be loaded; ``line`` is in the bot's file."""
+
+    def __init__(self, message: str, line: int | None = None) -> None:
+        """Create the error.
+
+        Args:
+            message: What went wrong.
+            line: The line in the bot's file, if known.
+        """
+        suffix = f" (line {line})" if line is not None else ""
+        super().__init__(f"{message}{suffix}")
+        self.line = line
