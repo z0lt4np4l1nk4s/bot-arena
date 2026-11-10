@@ -112,6 +112,7 @@ class GameMode(ABC):
                 if event.kind is not EventKind.ACTION_REFUSED
                 or event.side is side
             ),
+            rules=self.rules,
         )
 
     def step(

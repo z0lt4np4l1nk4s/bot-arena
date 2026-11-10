@@ -183,11 +183,11 @@ class MyBot:
         return Action.wait()
 ```
 
-API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, `Action.trap(position)` and `Action.wait()`, each with an optional `message=`. The directions are `Direction.UP/DOWN/LEFT/RIGHT`. The state is `BotState` with the fields `turn`, `max_turns`, `mode`, `map`, `crystals`, `me`, `opponent` and `events`. The helper functions are `distance` and `shortest_path`.
+API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, `Action.trap(position)` and `Action.wait()`, each with an optional `message=`. The directions are `Direction.UP/DOWN/LEFT/RIGHT`. The state is `BotState` with the fields `turn`, `max_turns`, `mode`, `map`, `crystals`, `me`, `opponent` and `events`. The helper functions are `distance`, `shortest_path` and `next_step`.
 
 - The bot is an instance that **lives for the whole match**, so it can remember things between turns.
 - A file may contain only one class that satisfies the protocol. If there are several or none, it is a loading error.
-- `arena.api` is the only application module a bot may use. It exposes `Action`, `Direction`, `BotState`, `Cell` and helper functions (e.g. `distance`, `shortest_path`), to make writing a bot pleasant.
+- `arena.api` is the only application module a bot may use. It exposes `Action`, `Direction`, `BotState`, `Position`, `Rules` and helper functions (`distance`, `shortest_path`, `next_step`), to make writing a bot pleasant.
 
 ### 6.2 What the bot sees (`BotState`, immutable)
 - `turn`, `max_turns`, `mode` (duel or solo)
@@ -196,6 +196,7 @@ API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, 
 - `me`: position, how many it carries, delivered, shooting cooldown, trap cooldown, stunned/trapped (remaining turns), free traps, **my active traps** (position and remaining turns)
 - `opponent` (`None` in solo): position, how many it carries, delivered, shooting cooldown, stunned/trapped. **Without its traps.**
 - `events`: what happened in the previous turn (a hit, stepping into a trap and whose it is, dropped crystals)
+- `rules`: the numbers of the game (carrying capacity, bullet range, cooldowns...), so a bot never has to hard-code them
 
 ### 6.3 Built-in bots
 - **Easy:** a random valid move. Sometimes shoots randomly.
@@ -217,14 +218,14 @@ bot-arena/
     arena/
       api.py                 # public interface for bot authors
       rules.py               # rules configuration (descriptors)
-      model/                 # Cell, Direction, Action, BotState, GameState (dataclasses)
+      model/                 # Position, Direction, Action, BotState, GameState (dataclasses)
       map_generator/                # map generator (seed, symmetry, BFS check)
       engine/                # GameMode (ABC), Duel, Solo, turn resolution
       bots/                  # Bot protocol, loading, registry, built-in bots
       runtime/               # bot processes, time limit, series
       storage/               # SQLite repository
       gui/                   # tkinter: tabs, Canvas, editor, viewer
-      utils/                 # decorators, memoization, logging
+      utilities/             # decorators, memoization, logging
   user_bots/               # .py files of user bots
   tests/                   # unittest
 ```
@@ -244,7 +245,8 @@ The implementer may change the layout if there is a good reason. The important s
 
 ### 7.4 Decorators and closures
 - `@measure_time`: measures the bot's thinking time (used in the bot process).
-- `@log_exceptions(file)`: a parameterized decorator that writes exceptions to `arena.log`.
+- `@log_exceptions(logger_name)`: a parameterized decorator that logs exceptions through the standard `logging` module.
+- **Logging levels are configurable** at start-up: `ERROR`, `WARNING` (default), `INFO` or `DEBUG`, written to `arena.log`. Bot processes use the same settings.
 - `@register_builtin`: a class decorator that adds a built-in bot to the registry.
 - `@memoize`: memoization implemented with a **closure** (a dictionary in the enclosing scope), used for shortest paths on the immutable map.
 - Closures are also used in the GUI (callback factories for buttons, e.g. `make_jump_to(turn)`) and in the turn ID counter.

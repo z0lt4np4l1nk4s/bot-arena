@@ -13,6 +13,7 @@ from arena.model.state import (
     ModeKind,
     OpponentView,
 )
+from arena.rules import Rules
 from builders import with_player
 
 
@@ -63,6 +64,11 @@ class BotViewTest(unittest.TestCase):
         self.assertEqual(len(blue_view.my_traps), 1)
         self.assertEqual(red_view.my_traps, ())
         self.assertIsInstance(red_view.opponent, OpponentView)
+
+    def test_bot_view_carries_the_rules(self) -> None:
+        duel = Duel(Rules(bullet_range=7))
+        view = duel.state_for_bot(duel.setup_map(1), Side.BLUE)
+        self.assertEqual(view.rules.bullet_range, 7)
 
     def test_view_carries_turn_and_map(self) -> None:
         duel = Duel()

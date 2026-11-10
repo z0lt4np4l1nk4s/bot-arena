@@ -11,6 +11,7 @@ from enum import Enum
 
 from arena.model.geometry import Position
 from arena.model.side import Side
+from arena.rules import Rules
 
 
 class ModeKind(Enum):
@@ -171,3 +172,4 @@ class BotState:
     my_traps: tuple[Trap, ...]
     opponent: OpponentView | None
     events: tuple[Event, ...]
+    rules: Rules
