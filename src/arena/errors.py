@@ -15,3 +15,7 @@ class RulesError(ArenaError):
 
 class InvalidActionError(ArenaError):
     """Raised when an action is built with inconsistent fields."""
+
+
+class MapGenerationError(ArenaError):
+    """Raised when no valid map can be generated for the given rules."""
