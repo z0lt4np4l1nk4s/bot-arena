@@ -11,3 +11,7 @@ class ArenaError(Exception):
 
 class RulesError(ArenaError):
     """Raised when game rules are given an invalid value."""
+
+
+class InvalidActionError(ArenaError):
+    """Raised when an action is built with inconsistent fields."""
