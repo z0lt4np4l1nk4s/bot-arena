@@ -2,7 +2,7 @@
 
 import unittest
 
-from arena.mapgen.paths import bfs_distances
+from arena.map_generator.paths import bfs_distances
 from arena.model.geometry import Position
 from arena.model.side import Side
 from arena.model.state import GameMap

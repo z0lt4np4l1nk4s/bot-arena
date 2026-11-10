@@ -12,7 +12,7 @@ from dataclasses import replace
 from typing import ClassVar
 
 from arena.engine.turn import resolve_turn
-from arena.mapgen.generator import generate, solo_crystals
+from arena.map_generator.generator import generate, solo_crystals
 from arena.model.actions import Action, ActionKind
 from arena.model.geometry import Position
 from arena.model.side import Side

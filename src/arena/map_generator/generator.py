@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Final
 
 from arena.errors import MapGenerationError
-from arena.mapgen.paths import bfs_distances
+from arena.map_generator.paths import bfs_distances
 from arena.model.geometry import Position, manhattan
 from arena.model.side import Side
 from arena.model.state import GameMap

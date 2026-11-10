@@ -9,7 +9,7 @@ paths:
 - Maximum line length **79**. Formatting is done by `ruff format`.
 - Imports at the top in two groups: standard library, then project modules. Absolute imports only (`from arena.model.geometry import Position`).
 - `snake_case` for functions, methods, variables, modules; `PascalCase` for classes; `UPPER_CASE` for constants; leading `_` for private names.
-- Names describe meaning, not type: `crystals_carried`, not `int_value` or `lst`.
+- Names describe meaning, not type: `crystals_carried`, not `int_value` or `lst`. Full words, no abbreviations (`map_generator`, not `mapgen`).
 
 ## Type annotations (PEP 484, PEP 526)
 - **Every** function and method has annotated parameters and a return type, including `-> None`.

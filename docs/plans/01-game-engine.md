@@ -4,7 +4,7 @@
 
 **Goal:** A pure-Python game engine that generates fair maps and resolves Bot Arena turns exactly as the spec describes, with no GUI, no bot processes and no storage.
 
-**Architecture:** Immutable value objects in `arena.model` (positions, actions, map, state). `arena.rules` holds every game number behind validated descriptors. `arena.mapgen` builds a 180°-symmetric map from a seed. `arena.engine.turn` is one pure function `resolve_turn(state, actions, rules) -> GameState`; `arena.engine.modes` wraps it in the `GameMode` ABC with `Duel` and `Solo`.
+**Architecture:** Immutable value objects in `arena.model` (positions, actions, map, state). `arena.rules` holds every game number behind validated descriptors. `arena.map_generator` builds a 180°-symmetric map from a seed. `arena.engine.turn` is one pure function `resolve_turn(state, actions, rules) -> GameState`; `arena.engine.modes` wraps it in the `GameMode` ABC with `Duel` and `Solo`.
 
 **Tech Stack:** Python 3.10 standard library only (`dataclasses`, `enum`, `abc`, `random`, `collections`, `typing`); `unittest` + `doctest`.
 
@@ -15,7 +15,7 @@
 - Python 3.10; no 3.11+ features. Standard library only.
 - Everything in English. Rules in `CLAUDE.md`, `.claude/rules/python.md`, `.claude/rules/tests.md` apply to every task.
 - Value objects are `@dataclass(frozen=True)`; the engine never mutates a state, it builds a new one.
-- `arena.model`, `arena.rules`, `arena.mapgen` and `arena.engine` never import anything from `gui`, `runtime` or `storage`.
+- `arena.model`, `arena.rules`, `arena.map_generator` and `arena.engine` never import anything from `gui`, `runtime` or `storage`.
 - Every game number comes from `Rules` (never a literal in engine code): grid 20, walls 15%, 8 crystal pairs (16 crystals), carry 3, bullet range 5, shoot cooldown 5, stun 2, traps 3 / trap lifetime 5 / stuck 3, duel 200 turns, solo 300 turns, turn limit 100 ms, kill timeout 2000 ms.
 - Run a single test file: `../venv/Scripts/python -m unittest discover -s tests -p "test_<name>.py" -v` (from `Projekt/`).
 - Every commit point: run the `verify` skill (all gates must pass), then commit with a lowercase plain-language message (no file or code names). The `reviewer` agent runs once, when the whole plan is finished.
@@ -211,7 +211,7 @@ def test_finished_when_turn_limit_reached_or_no_crystals(self) -> None:
 ### Task 4: Shortest-path distances
 
 **Files:**
-- Create: `src/arena/mapgen/__init__.py`, `src/arena/mapgen/paths.py`
+- Create: `src/arena/map_generator/__init__.py`, `src/arena/map_generator/paths.py`
 - Test: `tests/test_paths.py`
 
 **Interfaces:**
@@ -228,7 +228,7 @@ def test_finished_when_turn_limit_reached_or_no_crystals(self) -> None:
 ### Task 5: Symmetric map generator
 
 **Files:**
-- Create: `src/arena/mapgen/generator.py`
+- Create: `src/arena/map_generator/generator.py`
 - Modify: `src/arena/errors.py` (add `MapGenerationError(ArenaError)`)
 - Test: `tests/test_generator.py`
 

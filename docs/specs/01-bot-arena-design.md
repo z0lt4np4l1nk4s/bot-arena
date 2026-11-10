@@ -215,7 +215,7 @@ bot-arena/
       api.py                 # public interface for bot authors
       rules.py               # rules configuration (descriptors)
       model/                 # Cell, Direction, Action, BotState, GameState (dataclasses)
-      mapgen/                # map generator (seed, symmetry, BFS check)
+      map_generator/                # map generator (seed, symmetry, BFS check)
       engine/                # GameMode (ABC), Duel, Solo, turn resolution
       bots/                  # Bot protocol, loading, registry, built-in bots
       runtime/               # bot processes, time limit, series

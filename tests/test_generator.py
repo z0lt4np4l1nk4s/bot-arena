@@ -3,8 +3,8 @@
 import unittest
 
 from arena.errors import MapGenerationError
-from arena.mapgen.generator import generate, solo_crystals
-from arena.mapgen.paths import bfs_distances
+from arena.map_generator.generator import generate, solo_crystals
+from arena.map_generator.paths import bfs_distances
 from arena.model.geometry import Position
 from arena.model.side import Side
 from arena.rules import Rules
