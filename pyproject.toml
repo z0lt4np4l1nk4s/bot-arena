@@ -9,6 +9,7 @@ requires-python = ">=3.10"
 target-version = "py310"
 line-length = 79
 src = ["src", "tests"]
+extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = [

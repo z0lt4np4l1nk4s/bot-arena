@@ -34,5 +34,4 @@ Settings live in `pyproject.toml` (ruff, mypy, Pylance) and `setup.cfg` (pycodes
 Never silence a rule (`# noqa`, `# type: ignore`) without a comment explaining why.
 
 ## Git
-- Small commits, each passing all quality gates.
-- Message: short imperative summary (`Add map generator`), optional body explaining why.
+- Every commit passes all quality gates.
