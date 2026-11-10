@@ -80,7 +80,7 @@ In every turn both bots **simultaneously** receive their state and return one ac
 3. **Moves.** Moving into a wall or off the map means the bot stays in place. If both bots move to the same cell or swap cells, neither moves. A bot cannot enter the cell occupied by the opponent, unless the opponent leaves it in the same turn. **Two bots never share a cell.**
 4. **Traps:** a bot that stepped on an opponent's trap is stuck for **3 turns**, and the trap disappears.
 5. **Shooting** (based on the new positions, see 4.4).
-6. **Crystals:** a bot on a cell with crystals automatically picks up as many as it can carry (at most **3** in hand). A bot on **its own base** automatically delivers everything it carries. Delivered crystals are points.
+6. **Crystals:** a bot that **moves onto** a cell with crystals automatically picks up as many as it can carry (at most **3** in hand); standing still picks nothing up, so crystals dropped by a hit bot can be taken by the other bot. Stunned or trapped bots pick up and deliver nothing. A bot on **its own base** automatically delivers everything it carries. Delivered crystals are points.
 
 ### 4.3 Actions
 | Action | Description |

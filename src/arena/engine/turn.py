@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from arena.model.actions import Action, ActionKind
-from arena.model.geometry import Position
+from arena.model.geometry import Direction, Position
 from arena.model.side import Side
 from arena.model.state import (
     Event,
@@ -38,8 +38,12 @@ def resolve_turn(
     """
     turn = _Turn.start(state, rules)
     chosen = _choose_actions(turn, actions)
+    _place_traps(turn, chosen)
     _move(turn, chosen)
+    _trigger_traps(turn)
+    _shoot(turn, chosen)
     _collect_crystals(turn)
+    _tick_traps(turn)
     return turn.finish(state)
 
 
@@ -55,6 +59,7 @@ class _Turn:
     spent_traps: list[Trap]
     disabled: set[Side] = field(default_factory=set)
     may_shoot: set[Side] = field(default_factory=set)
+    moved: set[Side] = field(default_factory=set)
     events: list[Event] = field(default_factory=list)
 
     @classmethod
@@ -93,6 +98,13 @@ class _Turn:
             events=tuple(self.events),
         )
 
+    def refuse(self, side: Side, reason: str) -> None:
+        """Record that ``side``'s action was turned into a wait."""
+        position = self.players[side].position
+        self.events.append(
+            Event(EventKind.ACTION_REFUSED, side, position, reason=reason)
+        )
+
     def is_inactive(self, side: Side) -> bool:
         """Whether ``side`` was disabled at the start or became disabled."""
         return side in self.disabled or self.players[side].is_disabled
@@ -110,6 +122,33 @@ def _choose_actions(
     }
 
 
+def _place_traps(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
+    """Place requested traps on the bots' current cells (rules step 2)."""
+    for side, action in chosen.items():
+        if action.kind is not ActionKind.TRAP:
+            continue
+        player = turn.players[side]
+        reason = _trap_refusal(turn, player)
+        if reason:
+            turn.refuse(side, reason)
+            continue
+        turn.traps.append(
+            Trap(side, player.position, turn.rules.trap_lifetime)
+        )
+        turn.players[side] = replace(player, free_traps=player.free_traps - 1)
+
+
+def _trap_refusal(turn: _Turn, player: PlayerState) -> str:
+    """Why ``player`` may not place a trap now; empty if it may."""
+    if player.free_traps == 0:
+        return "no free trap"
+    if player.position in turn.map.bases.values():
+        return "base"
+    if any(trap.position == player.position for trap in turn.traps):
+        return "trap already here"
+    return ""
+
+
 def _move(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
     """Move every bot whose move is not blocked (rules step 3)."""
     current = {side: player.position for side, player in turn.players.items()}
@@ -123,6 +162,7 @@ def _move(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
         if any(_blocked_by(target, current, wanted, side, o) for o in others):
             continue
         final[side] = target
+        turn.moved.add(side)
     for side, position in final.items():
         turn.players[side] = replace(turn.players[side], position=position)
 
@@ -157,11 +197,129 @@ def _blocked_by(
     return False
 
 
+def _trigger_traps(turn: _Turn) -> None:
+    """Catch bots that moved onto an opponent's trap (rules step 4)."""
+    for side in turn.moved:
+        player = turn.players[side]
+        trap = next(
+            (
+                trap
+                for trap in turn.traps
+                if trap.position == player.position and trap.owner is not side
+            ),
+            None,
+        )
+        if trap is None:
+            continue
+        turn.traps.remove(trap)
+        turn.spent_traps.append(trap)
+        turn.events.append(Event(EventKind.TRAPPED, side, player.position))
+        turn.players[side] = replace(
+            player,
+            trapped_turns=max(
+                player.trapped_turns, turn.rules.trap_stuck_turns
+            ),
+        )
+
+
+def _shoot(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
+    """Fire every allowed shot at the opponents' new positions (step 5).
+
+    All hits are found first and applied afterwards, so when both bots
+    shoot, both bullets count.
+    """
+    hits: list[Side] = []
+    for side, action in chosen.items():
+        if action.kind is not ActionKind.SHOOT or action.direction is None:
+            continue
+        shooter = turn.players[side]
+        if side not in turn.may_shoot:
+            turn.refuse(side, "cooldown")
+            continue
+        turn.players[side] = replace(
+            shooter, shoot_cooldown=turn.rules.shoot_cooldown
+        )
+        path = bullet_path(
+            turn.map,
+            shooter.position,
+            action.direction,
+            turn.rules.bullet_range,
+        )
+        hits.extend(
+            other
+            for other, player in turn.players.items()
+            if other is not side and player.position in path
+        )
+    for side in hits:
+        _hit(turn, side)
+
+
+def _hit(turn: _Turn, side: Side) -> None:
+    """Stun a hit bot and drop the crystals it carries on its cell."""
+    player = turn.players[side]
+    turn.events.append(Event(EventKind.HIT, side, player.position))
+    if player.carrying > 0:
+        on_ground = turn.crystals.get(player.position, 0)
+        _set_crystals(turn, player.position, on_ground + player.carrying)
+        turn.events.append(
+            Event(
+                EventKind.CRYSTALS_DROPPED,
+                side,
+                player.position,
+                amount=player.carrying,
+            )
+        )
+    turn.players[side] = replace(
+        player,
+        carrying=0,
+        stunned_turns=max(player.stunned_turns, turn.rules.stun_turns),
+    )
+
+
+def bullet_path(
+    game_map: GameMap,
+    start: Position,
+    direction: Direction,
+    bullet_range: int,
+) -> list[Position]:
+    """Return the cells a bullet passes, nearest first.
+
+    The bullet starts next to ``start`` and flies at most ``bullet_range``
+    cells; it stops before a wall or the edge of the map.
+
+    Args:
+        game_map: The map the bullet flies over.
+        start: The shooter's cell (not part of the path).
+        direction: The direction of the shot.
+        bullet_range: The maximum number of cells.
+
+    Returns:
+        The cells the bullet reaches.
+
+    >>> walled = GameMap(6, frozenset({Position(3, 0)}), {})
+    >>> bullet_path(walled, Position(0, 0), Direction.RIGHT, 5)
+    [Position(x=1, y=0), Position(x=2, y=0)]
+    """
+    path: list[Position] = []
+    cell = start
+    for _ in range(bullet_range):
+        cell = cell.moved(direction)
+        if not game_map.is_walkable(cell):
+            break
+        path.append(cell)
+    return path
+
+
 def _collect_crystals(turn: _Turn) -> None:
     """Pick up crystals, then deliver at the own base (rules step 6)."""
     for side, player in turn.players.items():
-        if not turn.is_inactive(side):
-            turn.players[side] = _deliver(turn, _pick_up(turn, player))
+        if turn.is_inactive(side):
+            continue
+        # Only a bot that enters a cell picks up its crystals, so crystals
+        # dropped by a hit bot can be taken by the other bot.
+        if side in turn.moved:
+            player = _pick_up(turn, player)  # noqa: PLW2901 - same bot
+        turn.players[side] = _deliver(turn, player)
 
 
 def _pick_up(turn: _Turn, player: PlayerState) -> PlayerState:
@@ -198,3 +356,23 @@ def _set_crystals(turn: _Turn, cell: Position, count: int) -> None:
         turn.crystals[cell] = count
     else:
         turn.crystals.pop(cell, None)
+
+
+def _tick_traps(turn: _Turn) -> None:
+    """Age every trap; expired traps go back to their owners (step 7)."""
+    turn.traps = _age(turn, turn.traps)
+    turn.spent_traps = _age(turn, turn.spent_traps)
+
+
+def _age(turn: _Turn, traps: list[Trap]) -> list[Trap]:
+    """Count traps down by one turn and return the ones still running."""
+    running: list[Trap] = []
+    for trap in traps:
+        if trap.turns_left > 1:
+            running.append(replace(trap, turns_left=trap.turns_left - 1))
+            continue
+        owner = turn.players[trap.owner]
+        turn.players[trap.owner] = replace(
+            owner, free_traps=owner.free_traps + 1
+        )
+    return running
