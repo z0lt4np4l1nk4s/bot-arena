@@ -136,6 +136,26 @@ class ResultTest(unittest.TestCase):
         state = with_player(state, Side.BLUE, delivered=4)
         self.assertIsNone(duel.winner(state))
 
+    def test_equal_score_earlier_last_delivery_wins(self) -> None:
+        duel = Duel()
+        state = with_player(
+            duel.setup_map(1), Side.RED, delivered=8, last_delivery_turn=90
+        )
+        state = with_player(
+            state, Side.BLUE, delivered=8, last_delivery_turn=120
+        )
+        self.assertIs(duel.winner(state), Side.RED)
+
+    def test_equal_score_in_the_same_turn_is_a_draw(self) -> None:
+        duel = Duel()
+        state = with_player(
+            duel.setup_map(1), Side.RED, delivered=8, last_delivery_turn=90
+        )
+        state = with_player(
+            state, Side.BLUE, delivered=8, last_delivery_turn=90
+        )
+        self.assertIsNone(duel.winner(state))
+
     def test_duel_ends_at_turn_200(self) -> None:
         duel = Duel()
         state = duel.setup_map(1)

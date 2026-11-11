@@ -53,6 +53,7 @@ class _Turn:
     """Mutable working copy of the state while one turn is resolved."""
 
     rules: Rules
+    number: int
     map: GameMap
     players: dict[Side, PlayerState]
     crystals: dict[Position, int]
@@ -69,6 +70,7 @@ class _Turn:
         """Note who may act this turn, then count the timers down."""
         turn = cls(
             rules=rules,
+            number=state.turn + 1,
             map=state.map,
             players=dict(state.players),
             crystals=dict(state.crystals),
@@ -403,7 +405,10 @@ def _deliver(turn: _Turn, player: PlayerState) -> PlayerState:
         )
     )
     return replace(
-        player, carrying=0, delivered=player.delivered + player.carrying
+        player,
+        carrying=0,
+        delivered=player.delivered + player.carrying,
+        last_delivery_turn=turn.number,
     )
 
 

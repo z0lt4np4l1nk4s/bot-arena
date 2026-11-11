@@ -111,7 +111,7 @@ Every action can carry an optional **message** (a string, e.g. `"going for cryst
 - When the opponent steps on a trap, it is stuck for 3 turns (cannot do anything) and the trap disappears. The trap returns to its owner when its 25 turns from placement run out, the same as if it had not been triggered. Both bots see that the trigger happened through the `events` field of the state (see 6.2).
 
 ### 4.6 End of match
-- A **Duel** ends after **200 turns** or when all crystals have been delivered. The bot with more delivered crystals wins. If they are equal, it is a draw.
+- A **Duel** ends after **200 turns** or when all crystals have been delivered. The bot with more delivered crystals wins. If they are equal, the bot that delivered its **last crystal in an earlier turn** wins; if that is equal too (the same turn, or nothing delivered), it is a draw.
 - **Solo:** one bot on the same kind of map (Blue base), **with no opponent, shooting or traps**. The map has only **8 crystals** (the half of the map closer to the Blue base). The goal is to deliver all 8 in as few turns as possible, at most **300**. The result is the number of turns, or "did not finish" together with the number of delivered crystals. For every seed the **best result (record)** is kept, along with which bot set it.
 
 ### 4.7 A bot that is late or crashes

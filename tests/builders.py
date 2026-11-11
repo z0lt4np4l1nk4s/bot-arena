@@ -74,6 +74,8 @@ def with_player(  # noqa: PLR0913 - one keyword per field is clearest
     stunned_turns: int | None = None,
     trapped_turns: int | None = None,
     free_traps: int | None = None,
+    trap_cooldown: int | None = None,
+    last_delivery_turn: int | None = None,
 ) -> GameState:
     """Return ``state`` with some fields of one player changed."""
     old = state.players[side]
@@ -92,6 +94,14 @@ def with_player(  # noqa: PLR0913 - one keyword per field is clearest
             old.trapped_turns if trapped_turns is None else trapped_turns
         ),
         free_traps=old.free_traps if free_traps is None else free_traps,
+        trap_cooldown=(
+            old.trap_cooldown if trap_cooldown is None else trap_cooldown
+        ),
+        last_delivery_turn=(
+            old.last_delivery_turn
+            if last_delivery_turn is None
+            else last_delivery_turn
+        ),
     )
     return replace(state, players={**state.players, side: new})
 

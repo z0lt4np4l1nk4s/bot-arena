@@ -188,12 +188,18 @@ class Duel(GameMode):
         return True
 
     def winner(self, state: GameState) -> Side | None:
-        """The side with more delivered crystals; ``None`` on a draw."""
-        blue = state.player(Side.BLUE).delivered
-        red = state.player(Side.RED).delivered
-        if blue == red:
+        """The side with more delivered crystals.
+
+        With equal scores, the side that delivered its last crystal in an
+        earlier turn wins; if that is equal too, it is a draw (``None``).
+        """
+        blue, red = state.player(Side.BLUE), state.player(Side.RED)
+        if blue.delivered != red.delivered:
+            return Side.BLUE if blue.delivered > red.delivered else Side.RED
+        blue_last, red_last = blue.last_delivery_turn, red.last_delivery_turn
+        if blue_last is None or red_last is None or blue_last == red_last:
             return None
-        return Side.BLUE if blue > red else Side.RED
+        return Side.BLUE if blue_last < red_last else Side.RED
 
 
 class Solo(GameMode):

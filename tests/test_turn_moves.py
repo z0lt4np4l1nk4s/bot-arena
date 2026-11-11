@@ -127,6 +127,13 @@ class CrystalTest(unittest.TestCase):
         self.assertIn(EventKind.DELIVERED, [e.kind for e in after.events])
         self.assertEqual(after.events[0].amount, 2)
 
+    def test_delivery_records_the_turn(self) -> None:
+        state = with_player(
+            picture(".B....", *EMPTY[1:]), Side.BLUE, carrying=1
+        )
+        after = blue_moves(state, LEFT)
+        self.assertEqual(after.player(Side.BLUE).last_delivery_turn, 1)
+
     def test_no_delivery_at_opponent_base(self) -> None:
         state = with_player(
             picture("R.....", *EMPTY[1:5], "....B."), Side.BLUE, carrying=2

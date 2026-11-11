@@ -75,6 +75,8 @@ class PlayerState:
     trapped_turns: int = 0
     free_traps: int = 0
     trap_cooldown: int = 0
+    # The turn of the latest delivery; breaks a tie in delivered crystals.
+    last_delivery_turn: int | None = None
 
     @property
     def is_disabled(self) -> bool:
