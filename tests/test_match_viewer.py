@@ -3,19 +3,41 @@
 import unittest
 from dataclasses import replace
 
+from arena.gui.icons import IconName
 from arena.gui.match_viewer import MatchViewer
+from arena.gui.sounds import SoundEffects
+from arena.model.state import EventKind
 from arena.rules import Rules
 from gui_support import hidden_root
 from recorded import record_match
 
 RECORDED = record_match(turns=30)
 TURNS = len(RECORDED.turns)
+LONG = record_match()
+FIRST_SHOT_TURN = next(
+    record.turn
+    for record in LONG.turns
+    if any(event.kind is EventKind.SHOT for event in record.state.events)
+)
+
+
+class RecordingPlayer:
+    """Remembers every sound it is asked to play."""
+
+    def __init__(self) -> None:
+        self.sounds: list[bytes] = []
+
+    def play(self, sound: bytes) -> None:
+        self.sounds.append(sound)
 
 
 class MatchViewerTest(unittest.TestCase):
     def setUp(self) -> None:
         self.root = hidden_root(self)
-        self.viewer = MatchViewer(self.root, Rules())
+        self.player = RecordingPlayer()
+        self.viewer = MatchViewer(
+            self.root, Rules(), SoundEffects(self.player)
+        )
 
     def label(self) -> str:
         """The turn counter text."""
@@ -56,6 +78,7 @@ class MatchViewerTest(unittest.TestCase):
         self.viewer.start_live(RECORDED.summary, RECORDED.initial_state)
         for record in RECORDED.turns[:3]:
             self.viewer.add_turn(record)
+            self.root.update()
         self.assertTrue(self.viewer.is_live)
         self.assertEqual(self.label(), "Turn 3 / 30")
 
@@ -72,6 +95,32 @@ class MatchViewerTest(unittest.TestCase):
         saved = replace(RECORDED, summary=RECORDED.summary.with_id(4))
         self.viewer.show_recorded(saved)
         self.assertEqual(self.viewer.match_id, 4)
+
+    def test_step_forward_plays_effects(self) -> None:
+        self.viewer.show_recorded(LONG)
+        rows = self.viewer.log.get_children()
+        self.viewer.log.selection_set(rows[2 * (FIRST_SHOT_TURN - 2)])
+        self.root.update()
+        self.assertEqual(self.player.sounds, [])
+        self.viewer.next_button.invoke()
+        self.assertEqual(len(self.player.sounds), 1)
+        effects = self.viewer.map_canvas.find_withtag("effect")
+        self.assertNotEqual(effects, ())
+
+    def test_jump_plays_no_effects(self) -> None:
+        self.viewer.show_recorded(LONG)
+        rows = self.viewer.log.get_children()
+        self.viewer.log.selection_set(rows[-1])
+        self.root.update()
+        self.assertEqual(self.player.sounds, [])
+        self.assertEqual(self.viewer.map_canvas.find_withtag("effect"), ())
+
+    def test_sound_button_mutes(self) -> None:
+        self.viewer.sound_button.invoke()
+        self.assertFalse(self.viewer.sounds.enabled)
+        self.assertIs(self.viewer.sound_button.icon, IconName.SOUND_OFF)
+        self.viewer.sound_button.invoke()
+        self.assertTrue(self.viewer.sounds.enabled)
 
     def test_clear_shows_empty_viewer(self) -> None:
         self.viewer.show_recorded(RECORDED)

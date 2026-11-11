@@ -11,6 +11,8 @@ from collections.abc import Callable
 from tkinter import ttk
 from typing import Final
 
+from arena.gui.animations import EffectAnimator, animation_duration_ms
+from arena.gui.effects import turn_effects
 from arena.gui.formatting import log_rows, player_status, score_text
 from arena.gui.icons import IconButton, IconName
 from arena.gui.map_canvas import SIDE_COLOURS, MapCanvas
@@ -21,6 +23,7 @@ from arena.gui.playback import (
     make_jump_to,
     tick_delay_ms,
 )
+from arena.gui.sounds import SilentSoundPlayer, SoundEffects
 from arena.model.side import Side
 from arena.model.state import GameState
 from arena.rules import Rules
@@ -41,15 +44,24 @@ CURRENT_BACKGROUND: Final = "#fff4c2"
 class MatchViewer(ttk.Frame):
     """Shows one match at a time, live or recorded."""
 
-    def __init__(self, master: tk.Misc, rules: Rules) -> None:
+    def __init__(
+        self,
+        master: tk.Misc,
+        rules: Rules,
+        sounds: SoundEffects | None = None,
+    ) -> None:
         """Create an empty viewer.
 
         Args:
             master: The parent widget.
             rules: The rules of the matches that will be shown.
+            sounds: Plays the sounds of a turn; silent if not given.
         """
         super().__init__(master, padding=8)
         self.rules = rules
+        self.sounds = (
+            sounds if sounds is not None else SoundEffects(SilentSoundPlayer())
+        )
         self.is_live = False
         self.match_id: int | None = None
         self.playback: Playback | None = None
@@ -60,6 +72,8 @@ class MatchViewer(ttk.Frame):
         self._speed = DEFAULT_SPEED
         self._moving_slider = False
         self._timer: str | None = None
+        self._refresh_pending: str | None = None
+        self._shown_turn: int | None = None
         self._build_header()
         self._build_map_and_controls()
         self._build_log()
@@ -83,7 +97,9 @@ class MatchViewer(ttk.Frame):
             return
         self._append(record)
         self.playback.add_turn()
-        self._refresh()
+        # Turns that arrive together are drawn once, without animations.
+        if self._refresh_pending is None:
+            self._refresh_pending = self.after_idle(self._refresh_live)
 
     def finish_live(
         self, match: RecordedMatch, match_id: int | None = None
@@ -126,17 +142,24 @@ class MatchViewer(ttk.Frame):
         self._set_controls_enabled(False)
 
     def destroy(self) -> None:
-        """Stop the playback timer before the widget goes away."""
-        if self._timer is not None:
-            self.after_cancel(self._timer)
-            self._timer = None
+        """Stop the timers and animations before the widget goes away."""
+        for timer in (self._timer, self._refresh_pending):
+            if timer is not None:
+                self.after_cancel(timer)
+        self._timer = self._refresh_pending = None
+        self.animator.cancel()
         super().destroy()
 
     def current_state(self) -> GameState | None:
         """The state of the turn being shown."""
-        if self.playback is None or self._initial is None:
+        if self.playback is None:
             return None
-        turn = self.playback.current
+        return self._state_at(self.playback.current)
+
+    def _state_at(self, turn: int) -> GameState | None:
+        """The state after ``turn`` (0 is the start of the match)."""
+        if self._initial is None or turn < 0:
+            return None
         return self._initial if turn == 0 else self._records[turn - 1].state
 
     def _build_header(self) -> None:
@@ -163,6 +186,7 @@ class MatchViewer(ttk.Frame):
         left.columnconfigure(0, weight=1)
         self.map_canvas = MapCanvas(left, self.rules)
         self.map_canvas.grid(row=0, column=0, sticky="nsew")
+        self.animator = EffectAnimator(self.map_canvas)
         controls = ttk.Frame(left, padding=(0, 6))
         controls.grid(row=1, column=0, sticky="ew")
         self.buttons: list[IconButton] = []
@@ -198,6 +222,11 @@ class MatchViewer(ttk.Frame):
         )
         self.speed_slider.set(DEFAULT_SPEED)
         self.speed_slider.pack(side="left")
+        self.sound_button = self._button(
+            controls, IconName.SOUND_ON, "Sound on or off", self._on_sound
+        )
+        # Sound can be switched even when no match is shown.
+        self.buttons.remove(self.sound_button)
         self.hint_label = ttk.Label(left, foreground="#666666")
         self.hint_label.grid(row=2, column=0, sticky="w")
 
@@ -257,6 +286,8 @@ class MatchViewer(ttk.Frame):
         """Forget the shown match and empty the log."""
         self.is_live = False
         self.match_id = None
+        self._shown_turn = None
+        self.animator.cancel()
         self._initial = initial
         self._records = []
         self._jumps = {}
@@ -302,13 +333,24 @@ class MatchViewer(ttk.Frame):
 
         return jump
 
-    def _refresh(self) -> None:
-        """Draw the shown turn and update every control."""
+    def _refresh_live(self) -> None:
+        """Draw the newest live turns that arrived together."""
+        self._refresh_pending = None
+        self._refresh(animate=True)
+
+    def _refresh(self, animate: bool = False) -> None:
+        """Draw the shown turn and update every control.
+
+        Args:
+            animate: Play the turn's effects if the view moved exactly one
+                turn forward (playing, live or the next button).
+        """
         state = self.current_state()
         playback = self.playback
         if state is None or playback is None:
             return
         self.map_canvas.draw(state)
+        self._play_effects(state, playback.current, animate)
         self.score_label.configure(text=score_text(state))
         for side, label in self.status_labels.items():
             if side in state.players:
@@ -329,6 +371,23 @@ class MatchViewer(ttk.Frame):
             self._moving_slider = False
         self._highlight_turn(playback.current)
 
+    def _play_effects(
+        self, state: GameState, turn: int, animate: bool
+    ) -> None:
+        """Animate and sound a one-turn step; stop animations otherwise."""
+        previous_turn, self._shown_turn = self._shown_turn, turn
+        if previous_turn == turn:
+            return
+        previous = self._state_at(turn - 1)
+        duration = animation_duration_ms(tick_delay_ms(self._speed))
+        one_step = previous_turn == turn - 1 and previous is not None
+        if not animate or not one_step or previous is None or not duration:
+            self.animator.cancel()
+            return
+        effects = turn_effects(previous, state)
+        self.animator.play(effects, duration)
+        self.sounds.play(effects)
+
     def _highlight_turn(self, turn: int) -> None:
         """Mark the log rows of ``turn`` and scroll them into view."""
         for item in self.log.tag_has("current"):
@@ -347,11 +406,13 @@ class MatchViewer(ttk.Frame):
             button.set_enabled(enabled)
         self.turn_slider.state(["!disabled"] if enabled else ["disabled"])
 
-    def _navigate(self, move: Callable[[Playback], None]) -> None:
+    def _navigate(
+        self, move: Callable[[Playback], None], animate: bool = False
+    ) -> None:
         """Apply a playback move and redraw."""
         if self.playback is not None:
             move(self.playback)
-            self._refresh()
+            self._refresh(animate)
 
     def _on_first(self) -> None:
         self._navigate(Playback.first)
@@ -363,7 +424,7 @@ class MatchViewer(ttk.Frame):
         self._navigate(Playback.toggle)
 
     def _on_next(self) -> None:
-        self._navigate(Playback.next)
+        self._navigate(Playback.next, animate=True)
 
     def _on_last(self) -> None:
         self._navigate(Playback.last)
@@ -380,6 +441,13 @@ class MatchViewer(ttk.Frame):
         """The user changed the playback speed."""
         self._speed = round(float(value))
 
+    def _on_sound(self) -> None:
+        """Switch the sound on or off."""
+        self.sounds.enabled = not self.sounds.enabled
+        self.sound_button.set_icon(
+            IconName.SOUND_ON if self.sounds.enabled else IconName.SOUND_OFF
+        )
+
     def _on_log_select(self, _event: object) -> None:
         """Jump to the turn of the selected log row."""
         for item in self.log.selection():
@@ -394,7 +462,7 @@ class MatchViewer(ttk.Frame):
     def _on_tick(self) -> None:
         """Move forward while playing, then wait for the next tick."""
         if self.playback is not None and self.playback.tick():
-            self._refresh()
+            self._refresh(animate=True)
         elif self.playback is not None and not self.playback.playing:
             self.play_button.set_icon(IconName.PLAY)
         self._schedule_tick()

@@ -139,7 +139,8 @@ The main window is a `ttk.Notebook` with tabs. The **Match Viewer** tab opens wh
 
 ### 5.2 Match Viewer
 - **Left:** a Canvas with the map. Walls, bases, crystals (a count if there are several on a cell), both bots (colour and number of carried crystals, a marker when stunned or trapped) and the bullet line in a turn where a shot was fired. Traps are shown **for both bots, marked with their owner**, because this is the analyst's view, not the bot's.
-- **Below the map:** ⏮ ◀ ▶/⏸ ▶ ⏭, a slider to jump to a turn, a slider for playback speed, a label "Turn 47 / 200".
+- **Below the map:** icon buttons first, previous, play/pause, next, last (vector icons drawn in code, so no image files or symbol fonts are needed), a slider to jump to a turn, a slider for playback speed, a label "Turn 47 / 200".
+- **Animations and sound:** when the viewer moves one turn forward (playing, live or the next button), shots (a bullet flying), placed traps (a ring shrinking onto the cell), hits (a flash), triggered traps (a snap) and deliveries (the base pulsing) are animated and get a short sound. The sounds are synthesised in code; a button mutes them, and without a way to play sound the viewer is simply silent. Jumping or rewinding shows the new turn at once.
 - **Right:** the turn log. For every turn, each bot's action, its message, thinking time (ms) and errors or timeouts. Clicking a row jumps to that turn.
 - **Top:** the score (delivered crystals Blue : Red) and the bot state (carrying, shooting cooldown, remaining traps).
 - While the match is still running, it can be watched live or the already played turns can be rewound.
