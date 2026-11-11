@@ -10,6 +10,7 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from arena.errors import SchemaVersionError
 from arena.model.side import Side
 from arena.model.state import ModeKind
 from arena.storage.records import RecordedMatch, SoloRecord
@@ -157,6 +158,7 @@ class SqliteRepositoryTest(Contracts.Repository):
         last = RECORDED.turns[-1]
         broken_reply = dataclasses.replace(
             last.replies[Side.BLUE],
+            # A wrong type on purpose: saving must fail half way through.
             elapsed_ms="not a number",  # type: ignore[arg-type]
         )
         broken_turn = dataclasses.replace(
@@ -183,6 +185,14 @@ class SqliteRepositoryTest(Contracts.Repository):
                     f"SELECT COUNT(*) FROM {table}"
                 ).fetchone()[0]
                 self.assertEqual(count, 0, table)
+
+    def test_newer_schema_is_rejected(self) -> None:
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                "UPDATE metadata SET value = '99' WHERE key = 'schema_version'"
+            )
+        with self.assertRaises(SchemaVersionError):
+            SqliteMatchRepository(self.path)
 
     def test_values_are_queryable_with_sql(self) -> None:
         self.repository.save_match(RECORDED)

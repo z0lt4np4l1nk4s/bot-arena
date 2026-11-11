@@ -26,6 +26,7 @@ from arena.bots.source import BotSource
 from arena.errors import BotLoadError, InvalidActionError
 from arena.model.actions import MAX_MESSAGE_LENGTH, Action, ActionKind
 from arena.model.geometry import Direction, Position
+from arena.model.replies import BotReply
 from arena.model.state import BotState
 from arena.rules import Rules
 from arena.utilities.decorators import Timed, log_exceptions, measure_time
@@ -63,17 +64,6 @@ class Handshake:
 
     error: str | None = None
     line: int | None = None
-
-
-@dataclass(frozen=True)
-class BotReply:
-    """A bot's answer for one turn, with how long it took."""
-
-    turn: int
-    action: Action
-    elapsed_ms: float
-    error: str | None = None
-    timed_out: bool = False
 
 
 class BotProcess:

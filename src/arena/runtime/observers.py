@@ -26,6 +26,9 @@ class MatchObserver(Protocol):
     def on_match_finished(self, match: RecordedMatch, stopped: bool) -> None:
         """The match ended; ``stopped`` means the user ended it early."""
 
+    def on_match_failed(self, message: str) -> None:
+        """The match could not be played (e.g. a bot did not load)."""
+
 
 @dataclass(frozen=True)
 class MatchStarted:

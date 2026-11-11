@@ -31,6 +31,9 @@ class StorageObserver:
     def on_turn(self, record: TurnRecord) -> None:
         """Nothing is saved until the match ends."""
 
+    def on_match_failed(self, message: str) -> None:
+        """A failed match has nothing to save."""
+
     def on_match_finished(self, match: RecordedMatch, stopped: bool) -> None:
         """Save a match that ended normally, and a better solo result."""
         if stopped:

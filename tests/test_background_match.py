@@ -16,6 +16,8 @@ from arena.runtime.observers import (
     QueueObserver,
     TurnPlayed,
 )
+from arena.storage.repository import InMemoryMatchRepository
+from arena.storage.storage_observer import StorageObserver
 from test_match_runner import FakeClient, RecordingObserver
 
 
@@ -85,6 +87,33 @@ class BackgroundMatchTest(unittest.TestCase):
         assert match is not None
         self.assertLess(len(match.turns), 200)
         self.assertEqual(observer.finished, [True])
+
+    def test_stopped_background_match_is_not_saved(self) -> None:
+        repository = InMemoryMatchRepository()
+        runner = MatchRunner(
+            Duel(),
+            {
+                Side.BLUE: FakeClient("A", 0.02),
+                Side.RED: FakeClient("B", 0.02),
+            },
+            [StorageObserver(repository)],
+        )
+        handle = runner.run_in_background(1)
+        time.sleep(0.2)
+        handle.stop()
+        handle.join(2)
+        self.assertEqual(repository.list_matches(), [])
+
+    def test_failure_reaches_every_observer(self) -> None:
+        observer = RecordingObserver()
+        runner = MatchRunner(
+            Duel(Rules(duel_max_turns=4)),
+            {Side.BLUE: BrokenStartClient("A"), Side.RED: FakeClient("B")},
+            [observer],
+        )
+        with self.assertLogs("arena.runtime", "ERROR"):
+            runner.run_in_background(1).join(5)
+        self.assertEqual(observer.failures, ["cannot start"])
 
     def test_thread_error_is_reported(self) -> None:
         events: queue.Queue[MatchEvent] = queue.Queue()

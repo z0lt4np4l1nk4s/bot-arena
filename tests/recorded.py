@@ -5,9 +5,9 @@ from datetime import datetime
 from arena.bots.builtin.hard import HardBot
 from arena.engine.modes import Duel
 from arena.model.actions import Action
+from arena.model.replies import BotReply
 from arena.model.side import Side
 from arena.rules import Rules
-from arena.runtime.bot_process import BotReply
 from arena.storage.records import MatchSummary, RecordedMatch, TurnRecord
 
 # Seed 7 with two Hard bots has traps, a hit with dropped crystals, a

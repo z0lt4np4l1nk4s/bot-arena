@@ -12,10 +12,11 @@ from arena.bots.source import BotSource
 from arena.engine.modes import Duel, Solo
 from arena.errors import BotLoadError
 from arena.model.actions import Action
+from arena.model.replies import BotReply
 from arena.model.side import Side
 from arena.model.state import BotState, GameState
 from arena.rules import Rules
-from arena.runtime.bot_process import BotProcess, BotReply
+from arena.runtime.bot_process import BotProcess
 from arena.runtime.clients import BotClient, InProcessBotClient
 from arena.runtime.match_runner import MatchRunner
 from arena.storage.records import MatchSummary, RecordedMatch, TurnRecord
@@ -55,6 +56,7 @@ class RecordingObserver:
         self.started: list[MatchSummary] = []
         self.turns: list[int] = []
         self.finished: list[bool] = []
+        self.failures: list[str] = []
 
     def on_match_started(
         self, summary: MatchSummary, initial_state: GameState
@@ -66,6 +68,31 @@ class RecordingObserver:
 
     def on_match_finished(self, match: RecordedMatch, stopped: bool) -> None:
         self.finished.append(stopped)
+
+    def on_match_failed(self, message: str) -> None:
+        self.failures.append(message)
+
+
+class BlockingClient(FakeClient):
+    """Blocks on its first question; counts parallel questions."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.calls = 0
+        self.active = 0
+        self.most_active = 0
+        self._lock = threading.Lock()
+
+    def ask(self, turn: int, state: BotState) -> BotReply:
+        with self._lock:
+            self.calls += 1
+            self.active += 1
+            self.most_active = max(self.most_active, self.active)
+        if self.calls == 1:
+            time.sleep(0.5)
+        with self._lock:
+            self.active -= 1
+        return BotReply(turn, Action.wait(), 0.0)
 
 
 class FailingObserver(RecordingObserver):
@@ -168,6 +195,21 @@ class MatchRunnerTest(unittest.TestCase):
         started = time.monotonic()
         MatchRunner(Duel(Rules(duel_max_turns=5)), clients).run(1)
         self.assertLess(time.monotonic() - started, 1.25)
+
+
+class BusyClientTest(unittest.TestCase):
+    def test_busy_client_is_not_asked_again(self) -> None:
+        blocking = BlockingClient("Slow")
+        runner = MatchRunner(
+            Duel(Rules(duel_max_turns=6)),
+            in_process(blocking, FakeClient("B")),
+            safety_margin_seconds=0.05,
+        )
+        match = runner.run(1)
+        self.assertEqual(blocking.most_active, 1)
+        self.assertTrue(match.turns[0].replies[Side.BLUE].timed_out)
+        self.assertTrue(blocking.stopped)
+        self.assertEqual(blocking.active, 0)
 
 
 class RealProcessesTest(unittest.TestCase):

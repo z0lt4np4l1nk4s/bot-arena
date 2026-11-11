@@ -14,6 +14,7 @@ import random
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Final
 
 from arena.application import Application, ApplicationSettings
 from arena.bots.source import BotSource
@@ -22,6 +23,10 @@ from arena.model.side import Side
 from arena.model.state import ModeKind
 from arena.storage.records import RecordedMatch
 from arena.utilities.logger import LogLevel, LogSettings
+
+# The project folder: history, log and user bots live here, wherever the
+# program is started from.
+PROJECT_FOLDER: Final = Path(__file__).resolve().parent.parent
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
@@ -33,12 +38,13 @@ def main(arguments: Sequence[str] | None = None) -> int:
     Returns:
         The exit code: 0 on success, 2 if a bot could not be used.
     """
-    options = _parser().parse_args(arguments)
+    options = parse_arguments(arguments)
     settings = ApplicationSettings(
         database=Path(options.database),
         log_settings=LogSettings(
             LogLevel.from_name(options.log_level), Path(options.log_file)
         ),
+        user_bots_folder=PROJECT_FOLDER / "user_bots",
     )
     application = Application(settings)
     application.configure()
@@ -95,8 +101,15 @@ def _source(text: str) -> BotSource:
     return BotSource.builtin(text)
 
 
-def _parser() -> argparse.ArgumentParser:
-    """The command-line options."""
+def parse_arguments(arguments: Sequence[str] | None) -> argparse.Namespace:
+    """Read the command-line options; invalid ones exit with code 2.
+
+    Args:
+        arguments: The command-line arguments; ``None`` uses ``sys.argv``.
+
+    Returns:
+        The parsed options.
+    """
     parser = argparse.ArgumentParser(prog="bot-arena", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     play = commands.add_parser("play", help="play one match")
@@ -107,11 +120,15 @@ def _parser() -> argparse.ArgumentParser:
     play.add_argument(
         "--log-level",
         default="warning",
-        help="error, warning, info or debug (default: warning)",
+        choices=[level.name.lower() for level in LogLevel],
+        help="how much to write to the log (default: warning)",
     )
-    play.add_argument("--log-file", default="arena.log")
-    play.add_argument("--database", default="arena.db")
-    return parser
+    play.add_argument("--log-file", default=str(PROJECT_FOLDER / "arena.log"))
+    play.add_argument("--database", default=str(PROJECT_FOLDER / "arena.db"))
+    options = parser.parse_args(arguments)
+    if options.solo and options.red is not None:
+        play.error("a solo match has no Red bot")
+    return options
 
 
 if __name__ == "__main__":

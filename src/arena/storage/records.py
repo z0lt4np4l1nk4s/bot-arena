@@ -7,9 +7,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 
+from arena.model.replies import BotReply
 from arena.model.side import Side
 from arena.model.state import GameState, ModeKind
-from arena.runtime.bot_process import BotReply
 
 
 @dataclass(frozen=True)

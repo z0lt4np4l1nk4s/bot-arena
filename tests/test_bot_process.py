@@ -14,10 +14,11 @@ from arena.engine.modes import Duel
 from arena.errors import BotLoadError
 from arena.model.actions import Action, ActionKind
 from arena.model.geometry import Direction
+from arena.model.replies import BotReply
 from arena.model.side import Side
 from arena.model.state import BotState
 from arena.rules import Rules
-from arena.runtime.bot_process import BotProcess, BotReply
+from arena.runtime.bot_process import BotProcess
 
 RULES = Rules(turn_time_limit_ms=200, bot_kill_timeout_ms=600)
 BOT_FILES = Path(__file__).parent / "bot_files"

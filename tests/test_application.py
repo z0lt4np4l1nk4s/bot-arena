@@ -99,6 +99,22 @@ class CommandLineTest(unittest.TestCase):
         with SqliteMatchRepository(self.database) as repository:
             self.assertEqual(len(repository.list_matches()), 1)
 
+    def test_invalid_log_level_is_a_clean_error(self) -> None:
+        with self.assertRaises(SystemExit) as context:
+            self.run_main("play", "Easy", "--log-level", "loud")
+        self.assertEqual(context.exception.code, 2)
+
+    def test_solo_with_a_red_bot_is_an_error(self) -> None:
+        with self.assertRaises(SystemExit) as context:
+            self.run_main("play", "Easy", "Hard", "--solo")
+        self.assertEqual(context.exception.code, 2)
+
+    def test_default_files_are_in_the_project_folder(self) -> None:
+        options = main.parse_arguments(["play", "Easy"])
+        project = Path(main.__file__).resolve().parent.parent
+        self.assertEqual(Path(options.database), project / "arena.db")
+        self.assertEqual(Path(options.log_file), project / "arena.log")
+
     def test_main_reports_broken_bot(self) -> None:
         broken = self.folder / "broken.py"
         broken.write_text("def broken(:\n", encoding="utf-8")

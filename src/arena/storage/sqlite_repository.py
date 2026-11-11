@@ -18,8 +18,10 @@ from pathlib import Path
 from types import TracebackType
 from typing import TypeAlias
 
+from arena.errors import SchemaVersionError
 from arena.model.actions import Action, ActionKind
 from arena.model.geometry import Direction, Position
+from arena.model.replies import BotReply
 from arena.model.side import Side
 from arena.model.state import (
     Event,
@@ -30,7 +32,6 @@ from arena.model.state import (
     PlayerState,
     Trap,
 )
-from arena.runtime.bot_process import BotReply
 from arena.storage.records import (
     MatchSummary,
     RecordedMatch,
@@ -60,6 +61,9 @@ class SqliteMatchRepository(MatchRepository):
 
         Args:
             path: The database file, or ``":memory:"``.
+
+        Raises:
+            SchemaVersionError: If a newer version wrote the file.
         """
         self._connection = sqlite3.connect(str(path), check_same_thread=False)
         self._lock = threading.Lock()
@@ -71,6 +75,17 @@ class SqliteMatchRepository(MatchRepository):
                 "INSERT OR IGNORE INTO metadata VALUES ('schema_version', ?)",
                 (str(SCHEMA_VERSION),),
             )
+            stored = connection.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            ).fetchone()[0]
+        if int(stored) > SCHEMA_VERSION:
+            self._connection.close()
+            message = (
+                f"{path} was written by a newer version of Bot Arena "
+                f"(database version {stored}, this version reads "
+                f"{SCHEMA_VERSION})"
+            )
+            raise SchemaVersionError(message)
 
     def __enter__(self) -> "SqliteMatchRepository":
         """Use the repository in a ``with`` block."""

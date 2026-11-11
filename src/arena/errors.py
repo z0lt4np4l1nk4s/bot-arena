@@ -21,6 +21,10 @@ class MapGenerationError(ArenaError):
     """Raised when no valid map can be generated for the given rules."""
 
 
+class SchemaVersionError(ArenaError):
+    """Raised when a database was written by a newer version."""
+
+
 class BotLoadError(ArenaError):
     """Raised when a bot cannot be loaded; ``line`` is in the bot's file."""
 

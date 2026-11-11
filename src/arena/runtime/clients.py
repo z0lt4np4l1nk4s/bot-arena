@@ -11,8 +11,9 @@ from arena.bots.loader import describe_error
 from arena.bots.protocol import Bot
 from arena.errors import InvalidActionError
 from arena.model.actions import Action
+from arena.model.replies import BotReply
 from arena.model.state import BotState
-from arena.runtime.bot_process import BotReply, rebuild_action
+from arena.runtime.bot_process import rebuild_action
 from arena.utilities.decorators import measure_time
 
 
