@@ -283,7 +283,7 @@ The implementer may change the layout if there is a good reason. The important s
 - Everything runs with `python -m unittest discover -s tests` (doctests are included via `load_tests`).
 
 ### 7.9 Storage
-- `arena.db` (SQLite) in the project folder. Tables for matches (mode, seed, bots, result, date, number of turns), turns (JSON of states and actions with messages and times, per turn), solo records and series summaries.
+- `arena.db` (SQLite) in the project folder, **one column per value** (no JSON or pickle), so the history can be explored with plain SQL: `matches` (mode, seed, bots, result, date, number of turns), `match_walls`, per turn `turn_players` (each bot's state and its reply: action, message, thinking time, error, timeout), `turn_crystals`, `turn_traps`, `turn_events`, plus `solo_records` and later series summaries. A `metadata` table keeps the schema version.
 - **Every** match from the Play tab is saved (not matches from series).
 - Replays do not run the bots again. The recording is loaded.
 
