@@ -15,7 +15,9 @@ from arena.gui.sounds import SilentSoundPlayer, SoundEffects
 from arena.model.state import ModeKind
 from arena.rules import Rules
 from gui_support import hidden_root
+from recorded import record_match
 
+RECORDED = record_match(turns=10)
 MEDIUM = BotSource.builtin("Medium")
 EASY = BotSource.builtin("Easy")
 # Answers too late every turn, so its matches take a while.
@@ -58,6 +60,7 @@ class MainWindowTest(unittest.TestCase):
         self.assertEqual(len(saved), 1)
         self.assertEqual(window.viewer.match_id, saved[0].match_id)
         self.assertFalse(window.viewer.is_live)
+        self.assertEqual(len(window.history_tab.table.get_children()), 1)
 
     def test_failed_match_reports_error_and_enables_start(self) -> None:
         window = self.open_window()
@@ -98,6 +101,38 @@ class MainWindowTest(unittest.TestCase):
         window.show_tab(window.play_tab)
         self.root.update()
         self.assertIn("late_bot", window.play_tab.blue_combo.cget("values"))
+
+    def open_from_history(self, window: MainWindow) -> int:
+        """Save the recorded match and open it from the History tab."""
+        match_id = self.application.repository.save_match(RECORDED)
+        history = window.history_tab
+        history.refresh()
+        history.table.selection_set(history.table.get_children()[0])
+        history.open_selected()
+        return match_id
+
+    def test_opening_a_match_from_history_shows_it(self) -> None:
+        window = self.open_window()
+        match_id = self.open_from_history(window)
+        self.assertEqual(window.current_tab, str(window.viewer))
+        self.assertEqual(window.viewer.match_id, match_id)
+
+    def test_deleting_the_open_match_clears_the_viewer(self) -> None:
+        window = self.open_window()
+        self.open_from_history(window)
+        with mock.patch(
+            "arena.gui.history_tab.messagebox.askyesno", return_value=True
+        ):
+            window.history_tab.delete_button.invoke()
+        self.assertIsNone(window.viewer.match_id)
+        self.assertIsNone(window.viewer.playback)
+
+    def test_history_is_read_again_when_shown(self) -> None:
+        window = self.open_window()
+        self.application.repository.save_match(RECORDED)
+        window.show_tab(window.history_tab)
+        self.root.update()
+        self.assertEqual(len(window.history_tab.table.get_children()), 1)
 
 
 if __name__ == "__main__":

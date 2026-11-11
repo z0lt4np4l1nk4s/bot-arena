@@ -1,4 +1,4 @@
-"""The main window: a notebook with the Play and Match Viewer tabs.
+"""The main window: a notebook with the Play, Match Viewer and History tabs.
 
 Matches run in a background thread; the window polls their events every
 50 ms with ``after`` and is the only code that touches tkinter, always on
@@ -15,6 +15,7 @@ from typing import Final
 from arena.application import Application
 from arena.bots.source import BotSource
 from arena.gui.formatting import result_text
+from arena.gui.history_tab import HistoryTab
 from arena.gui.match_session import MatchSession, find_saved_match_id
 from arena.gui.match_viewer import MatchViewer
 from arena.gui.play_tab import PlayTab
@@ -27,6 +28,7 @@ from arena.runtime.observers import (
     MatchStarted,
     TurnPlayed,
 )
+from arena.storage.records import RecordedMatch
 
 POLL_MS: Final = 50
 CLOSE_POLL_MS: Final = 100
@@ -70,8 +72,15 @@ class MainWindow:
         self.viewer = MatchViewer(
             self.notebook, application.settings.rules, sounds
         )
+        self.history_tab = HistoryTab(
+            self.notebook,
+            application.repository,
+            self.open_match,
+            self._on_deleted,
+        )
         self.notebook.add(self.play_tab, text="Play")
         self.notebook.add(self.viewer, text="Match Viewer")
+        self.notebook.add(self.history_tab, text="History")
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         window.protocol("WM_DELETE_WINDOW", self.close)
         self._timer: str | None = window.after(POLL_MS, self._poll)
@@ -93,6 +102,15 @@ class MainWindow:
             return
         self.play_tab.set_running(True)
         self.play_tab.show_info(f"Playing seed {seed}...")
+
+    def open_match(self, match: RecordedMatch) -> None:
+        """Show a saved match in the viewer.
+
+        A live match keeps running and is saved when it ends, but the
+        viewer no longer follows it.
+        """
+        self.viewer.show_recorded(match)
+        self.show_tab(self.viewer)
 
     @property
     def current_tab(self) -> str:
@@ -156,6 +174,7 @@ class MainWindow:
         if self.viewer.is_live:
             self.viewer.finish_live(event.match, match_id)
         self.play_tab.set_running(False)
+        self.history_tab.refresh()
         if event.stopped:
             self.play_tab.show_info("The match was stopped and not saved.")
         else:
@@ -170,7 +189,14 @@ class MainWindow:
             "The match could not start", event.message, parent=self.window
         )
 
+    def _on_deleted(self, match_id: int) -> None:
+        """A match was deleted; stop showing it if it is open."""
+        if self.viewer.match_id == match_id:
+            self.viewer.clear()
+
     def _on_tab_changed(self, _event: object) -> None:
-        """Read the list of bots again whenever the Play tab is shown."""
+        """Read the bots or the history again when their tab is shown."""
         if self.current_tab == str(self.play_tab):
             self.play_tab.refresh_bots()
+        elif self.current_tab == str(self.history_tab):
+            self.history_tab.refresh()
