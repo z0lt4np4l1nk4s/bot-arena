@@ -121,6 +121,11 @@ class BotProcess:
         self.stop()
 
     @property
+    def name(self) -> str:
+        """The bot's display name."""
+        return self.source.name
+
+    @property
     def is_alive(self) -> bool:
         """Whether the child process is running."""
         return self._process is not None and self._process.is_alive()

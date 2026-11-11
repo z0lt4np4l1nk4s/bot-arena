@@ -77,6 +77,11 @@ class GameMode(ABC):
     def winner(self, state: GameState) -> Side | None:
         """The winning side of a finished match, or ``None``."""
 
+    def turns_used(self, state: GameState) -> int | None:
+        """Turns needed to finish, for modes that measure it."""
+        del state
+        return None
+
     def is_over(self, state: GameState) -> bool:
         """Whether the match has ended."""
         return state.is_finished
