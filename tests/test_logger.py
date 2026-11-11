@@ -10,6 +10,7 @@ from arena.utilities.logger import (
     LogSettings,
     configure_logging,
     get_logger,
+    shutdown_logging,
 )
 
 
@@ -78,6 +79,13 @@ class ConfigureLoggingTest(unittest.TestCase):
 
     def test_get_logger_lives_under_arena(self) -> None:
         self.assertEqual(self.logger.name, "arena.example")
+
+    def test_shutdown_closes_the_log_file(self) -> None:
+        self.configure(LogLevel.INFO)
+        self.logger.info("last words")
+        shutdown_logging()
+        self.log_file.unlink()  # fails on Windows if the file is still open
+        self.assertFalse(self.log_file.exists())
 
     def test_default_settings(self) -> None:
         settings = LogSettings()

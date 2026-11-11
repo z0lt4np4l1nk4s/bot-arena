@@ -64,14 +64,27 @@ def configure_logging(settings: LogSettings) -> None:
     Args:
         settings: The level, file and format to use.
     """
-    logger = logging.getLogger(ROOT_LOGGER_NAME)
-    for handler in list(logger.handlers):
-        handler.close()
-        logger.removeHandler(handler)
+    logger = _remove_handlers()
     handler = logging.FileHandler(settings.log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter(settings.message_format))
     logger.addHandler(handler)
     logger.setLevel(settings.level.value)
+
+
+def shutdown_logging() -> None:
+    """Close the log file and go back to dropping log records silently."""
+    logger = _remove_handlers()
+    logger.addHandler(logging.NullHandler())
+    logger.setLevel(logging.NOTSET)
+
+
+def _remove_handlers() -> logging.Logger:
+    """Close and remove every handler of the application's logger."""
+    logger = logging.getLogger(ROOT_LOGGER_NAME)
+    for handler in list(logger.handlers):
+        handler.close()
+        logger.removeHandler(handler)
+    return logger
 
 
 def get_logger(component: str) -> logging.Logger:

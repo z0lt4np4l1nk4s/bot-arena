@@ -214,7 +214,7 @@ bot-arena/
   README.md
   requirements.txt
   src/
-    main.py                # application entry point
+    main.py                # entry point; `python src/main.py play Hard Medium` until the GUI
     arena/
       api.py                 # public interface for bot authors
       rules.py               # rules configuration (descriptors)
@@ -242,6 +242,8 @@ The implementer may change the layout if there is a good reason. The important s
 - `GameMode`: an `abc.ABC` with abstract methods (`setup_map`, `allows`, `winner`) and shared concrete methods (`state_for_bot`, `step`, `is_over`). The implementations are `Duel` and `Solo`; each registers itself by its kind, and `GameMode.create(kind)` builds one.
 - `MatchRepository`: an ABC with the implementations `SqliteMatchRepository` and `InMemoryMatchRepository` (for tests).
 - `MatchObserver`: a Protocol for event receivers (GUI, saving to the database).
+- `BotClient`: a Protocol for anything the match runner can ask for an action: a bot in its own process (`BotProcess`) or a bot called directly (`InProcessBotClient`, for tests and fast series).
+- **Dependency injection:** the match runner receives its game mode, bot clients and observers; the storage observer receives a repository. Only the composition root (`arena.application.Application`, used by `src/main.py`) chooses the concrete classes.
 
 ### 7.4 Decorators and closures
 - `@measure_time`: measures the bot's thinking time (used in the bot process).
