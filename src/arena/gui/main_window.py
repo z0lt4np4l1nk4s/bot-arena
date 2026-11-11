@@ -58,6 +58,9 @@ class MainWindow:
         self.session = MatchSession(application)
         self.closed = False
         self._closing = False
+        # Set when a match has ended but its thread may still be stopping
+        # the bots; Start is enabled once the session is really idle.
+        self._ending = False
         self._close_deadline = 0.0
         window.title(TITLE)
         window.minsize(*MINIMUM_SIZE)
@@ -152,6 +155,9 @@ class MainWindow:
             return
         for event in self.session.poll():
             self._handle(event)
+        if self._ending and not self.session.is_running:
+            self._ending = False
+            self.play_tab.set_running(False)
         self._timer = self.window.after(POLL_MS, self._poll)
 
     def _handle(self, event: MatchEvent) -> None:
@@ -173,7 +179,7 @@ class MainWindow:
         match_id = find_saved_match_id(self.application.repository, summary)
         if self.viewer.is_live:
             self.viewer.finish_live(event.match, match_id)
-        self.play_tab.set_running(False)
+        self._ending = True
         self.history_tab.refresh()
         if event.stopped:
             self.play_tab.show_info("The match was stopped and not saved.")
@@ -182,7 +188,7 @@ class MainWindow:
 
     def _on_failed(self, event: MatchFailed) -> None:
         """A match could not be played: tell the user."""
-        self.play_tab.set_running(False)
+        self._ending = True
         self.play_tab.show_error(event.message)
         self.show_tab(self.play_tab)
         messagebox.showerror(

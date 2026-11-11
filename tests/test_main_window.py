@@ -62,6 +62,30 @@ class MainWindowTest(unittest.TestCase):
         self.assertFalse(window.viewer.is_live)
         self.assertEqual(len(window.history_tab.table.get_children()), 1)
 
+    def test_start_waits_until_the_match_thread_has_ended(self) -> None:
+        # The slow bot is still thinking when the last turn ends, so the
+        # match thread needs a moment to stop it after the result is in.
+        window = self.open_window(
+            Rules(
+                turn_time_limit_ms=200,
+                bot_kill_timeout_ms=600,
+                duel_max_turns=2,
+            )
+        )
+        window.start_match(ModeKind.DUEL, SLOW, EASY, 3)
+
+        def result_shown() -> bool:
+            text = str(window.play_tab.message_label.cget("text"))
+            return text.startswith("Last match")
+
+        self.assertTrue(wait_for(result_shown, 15, self.root.update))
+        self.assertTrue(window.session.is_running)
+        self.assertTrue(window.play_tab.start_button.instate(["disabled"]))
+        self.assertTrue(
+            wait_for(lambda: self.match_over(window), 10, self.root.update)
+        )
+        self.assertFalse(window.session.is_running)
+
     def test_failed_match_reports_error_and_enables_start(self) -> None:
         window = self.open_window()
         broken = BotSource.from_file(add_broken_bot(self.application))

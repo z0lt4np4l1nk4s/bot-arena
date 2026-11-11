@@ -80,7 +80,11 @@ class MatchViewerTest(unittest.TestCase):
             self.viewer.add_turn(record)
             self.root.update()
         self.assertTrue(self.viewer.is_live)
-        self.assertEqual(self.label(), "Turn 0 / 30")
+        # The tick timer may already have shown a turn, but never all three.
+        playback = self.viewer.playback
+        assert playback is not None
+        self.assertEqual(playback.available, 3)
+        self.assertLess(playback.current, 3)
         self.viewer.last_button.invoke()
         self.assertEqual(self.label(), "Turn 3 / 30")
 
@@ -118,6 +122,36 @@ class MatchViewerTest(unittest.TestCase):
         self.root.update()
         self.assertEqual(self.player.sounds, [])
         self.assertEqual(self.viewer.map_canvas.find_withtag("effect"), ())
+
+    def test_new_live_turns_keep_the_log_where_the_user_scrolled(
+        self,
+    ) -> None:
+        self.viewer.start_live(LONG.summary, LONG.initial_state)
+        for record in LONG.turns[:60]:
+            self.viewer.add_turn(record)
+        self.viewer.log.selection_set(self.viewer.log.get_children()[0])
+        self.root.update()
+        self.viewer.log.yview_moveto(0.5)
+        self.root.update()
+        scrolled = self.viewer.log.yview()
+        for record in LONG.turns[60:65]:
+            self.viewer.add_turn(record)
+            self.root.update()
+        self.assertEqual(self.viewer.log.yview()[0], scrolled[0])
+
+    def test_new_live_turns_do_not_interrupt_an_animation(self) -> None:
+        self.viewer.start_live(LONG.summary, LONG.initial_state)
+        for record in LONG.turns[:FIRST_SHOT_TURN]:
+            self.viewer.add_turn(record)
+        rows = self.viewer.log.get_children()
+        self.viewer.log.selection_set(rows[2 * (FIRST_SHOT_TURN - 2)])
+        self.root.update()
+        self.viewer.next_button.invoke()
+        drawn = self.viewer.map_canvas.find_withtag("effect")
+        self.assertNotEqual(drawn, ())
+        self.viewer.add_turn(LONG.turns[FIRST_SHOT_TURN])
+        self.root.update_idletasks()
+        self.assertEqual(self.viewer.map_canvas.find_withtag("effect"), drawn)
 
     def test_sound_button_mutes(self) -> None:
         self.viewer.sound_button.invoke()

@@ -97,7 +97,8 @@ class MatchViewer(ttk.Frame):
             return
         self._append(record)
         self.playback.add_turn()
-        # Turns that arrive together are drawn once, without animations.
+        # New turns only change the controls (the shown turn stays until
+        # the next tick), so turns that arrive together update them once.
         if self._refresh_pending is None:
             self._refresh_pending = self.after_idle(self._refresh_live)
 
@@ -334,12 +335,16 @@ class MatchViewer(ttk.Frame):
         return jump
 
     def _refresh_live(self) -> None:
-        """Draw the newest live turns that arrived together."""
+        """Update the controls for the live turns that arrived together."""
         self._refresh_pending = None
-        self._refresh(animate=True)
+        self._refresh()
 
     def _refresh(self, animate: bool = False) -> None:
-        """Draw the shown turn and update every control.
+        """Update the controls, and draw the shown turn if it changed.
+
+        The map and the log are left alone while the shown turn stays the
+        same, so a running animation and the user's place in the log are
+        not disturbed by new live turns.
 
         Args:
             animate: Play the turn's effects if the view moved exactly one
@@ -349,15 +354,8 @@ class MatchViewer(ttk.Frame):
         playback = self.playback
         if state is None or playback is None:
             return
-        self.map_canvas.draw(state)
-        self._play_effects(state, playback.current, animate)
-        self.score_label.configure(text=score_text(state))
-        for side, label in self.status_labels.items():
-            if side in state.players:
-                status = player_status(state.player(side), self.rules)
-                label.configure(text=f"{side.name.capitalize()}: {status}")
-            else:
-                label.configure(text="")
+        if playback.current != self._shown_turn:
+            self._show_turn(state, playback.current, animate)
         self.turn_label.configure(text=playback.label)
         self.play_button.set_icon(
             IconName.PAUSE if playback.playing else IconName.PLAY
@@ -369,15 +367,25 @@ class MatchViewer(ttk.Frame):
             self.turn_slider.set(playback.current)
         finally:
             self._moving_slider = False
-        self._highlight_turn(playback.current)
+
+    def _show_turn(self, state: GameState, turn: int, animate: bool) -> None:
+        """Draw a newly shown turn: map, effects, score and log row."""
+        self.map_canvas.draw(state)
+        self._play_effects(state, turn, animate)
+        self.score_label.configure(text=score_text(state))
+        for side, label in self.status_labels.items():
+            if side in state.players:
+                status = player_status(state.player(side), self.rules)
+                label.configure(text=f"{side.name.capitalize()}: {status}")
+            else:
+                label.configure(text="")
+        self._highlight_turn(turn)
 
     def _play_effects(
         self, state: GameState, turn: int, animate: bool
     ) -> None:
         """Animate and sound a one-turn step; stop animations otherwise."""
         previous_turn, self._shown_turn = self._shown_turn, turn
-        if previous_turn == turn:
-            return
         previous = self._state_at(turn - 1)
         duration = animation_duration_ms(tick_delay_ms(self._speed))
         one_step = previous_turn == turn - 1 and previous is not None

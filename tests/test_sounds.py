@@ -1,9 +1,11 @@
 """Tests for the synthesised sounds and how they are played."""
 
 import io
+import sys
 import unittest
 import wave
 
+from applications import wait_for
 from arena.gui.effects import Effect, EffectKind
 from arena.gui.sounds import (
     SAMPLE_RATE,
@@ -121,6 +123,17 @@ class SoundEffectsTest(unittest.TestCase):
             effects.play([HIT])
         effects.play([SHOT])
         self.assertEqual(player.calls, 1)
+
+    def test_failing_sound_command_switches_sound_off(self) -> None:
+        failing = (sys.executable, "-c", "raise SystemExit(3)")
+        effects = SoundEffects(CommandSoundPlayer(failing))
+        with self.assertLogs("arena.gui", "WARNING"):
+            switched_off = wait_for(
+                lambda: not effects.working,
+                10,
+                lambda: effects.play([HIT]),
+            )
+        self.assertTrue(switched_off)
 
 
 if __name__ == "__main__":

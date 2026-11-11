@@ -195,10 +195,21 @@ class CommandSoundPlayer:
         self._running: list[subprocess.Popen[bytes]] = []
 
     def play(self, sound: bytes) -> None:
-        """Start the command in the background."""
-        self._running = [
-            process for process in self._running if process.poll() is None
-        ]
+        """Start the command in the background.
+
+        Raises:
+            OSError: If an earlier run of the command failed (e.g. there is
+                no sound card), so the caller can switch sound off.
+        """
+        still_running = []
+        for process in self._running:
+            code = process.poll()
+            if code is None:
+                still_running.append(process)
+            elif code != 0:
+                message = f"{self.command[0]} failed with exit code {code}"
+                raise OSError(message)
+        self._running = still_running
         path = self._files.path_for(sound)
         self._running.append(
             # A fixed command chosen at start-up and a file we wrote.
@@ -248,15 +259,15 @@ class SoundEffects:
         """Play through ``player`` (injected, so tests can listen)."""
         self.player = player
         self.enabled = True
-        self._broken = False
+        self.working = True
 
     def play(self, effects: Sequence[Effect]) -> None:
         """Play every kind of effect once, mixed together."""
-        if not self.enabled or self._broken or not effects:
+        if not self.enabled or not self.working or not effects:
             return
         kinds = list(dict.fromkeys(effect.kind for effect in effects))
         try:
             self.player.play(mix(kinds))
         except Exception:  # sound is optional; never disturb the window
             logger.warning("sound is switched off", exc_info=True)
-            self._broken = True
+            self.working = False
