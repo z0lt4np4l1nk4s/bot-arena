@@ -74,12 +74,14 @@ class MatchViewerTest(unittest.TestCase):
         ]
         self.assertEqual(highlighted, ["2", "2"])
 
-    def test_live_turns_are_followed(self) -> None:
+    def test_live_turns_wait_for_playback(self) -> None:
         self.viewer.start_live(RECORDED.summary, RECORDED.initial_state)
         for record in RECORDED.turns[:3]:
             self.viewer.add_turn(record)
             self.root.update()
         self.assertTrue(self.viewer.is_live)
+        self.assertEqual(self.label(), "Turn 0 / 30")
+        self.viewer.last_button.invoke()
         self.assertEqual(self.label(), "Turn 3 / 30")
 
     def test_finishing_live_match_shows_played_turns(self) -> None:
@@ -89,6 +91,8 @@ class MatchViewerTest(unittest.TestCase):
         self.viewer.finish_live(RECORDED, match_id=7)
         self.assertFalse(self.viewer.is_live)
         self.assertEqual(self.viewer.match_id, 7)
+        self.assertEqual(self.label(), f"Turn 0 / {TURNS}")
+        self.viewer.last_button.invoke()
         self.assertEqual(self.label(), f"Turn {TURNS} / {TURNS}")
 
     def test_recorded_match_keeps_its_id(self) -> None:

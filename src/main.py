@@ -1,7 +1,10 @@
 """Bot Arena entry point.
 
-Until the window is ready, matches are played from the command line::
+Without a command the window opens; ``play`` plays one match in the
+terminal::
 
+    python src/main.py
+    python src/main.py gui --log-level info
     python src/main.py play Hard Medium --seed 3
     python src/main.py play user_bots/my_bot.py Hard
     python src/main.py play Medium --solo --log-level info
@@ -10,8 +13,11 @@ A bot is a built-in name (Easy, Medium, Hard) or a path to a ``.py`` file.
 """
 
 import argparse
+import contextlib
+import ctypes
 import random
 import sys
+import tkinter as tk
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
@@ -19,6 +25,8 @@ from typing import Final
 from arena.application import Application, ApplicationSettings
 from arena.bots.source import BotSource
 from arena.errors import ArenaError
+from arena.gui.main_window import MainWindow
+from arena.gui.sounds import SoundEffects, choose_player
 from arena.model.side import Side
 from arena.model.state import ModeKind
 from arena.storage.records import RecordedMatch
@@ -27,6 +35,7 @@ from arena.utilities.logger import LogLevel, LogSettings
 # The project folder: history, log and user bots live here, wherever the
 # program is started from.
 PROJECT_FOLDER: Final = Path(__file__).resolve().parent.parent
+HELP: Final = ("-h", "--help")
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
@@ -49,9 +58,35 @@ def main(arguments: Sequence[str] | None = None) -> int:
     application = Application(settings)
     application.configure()
     try:
-        return _play(application, options)
+        if options.command == "play":
+            return _play(application, options)
+        return run_window(application)
     finally:
         application.close()
+
+
+def run_window(application: Application) -> int:
+    """Open the main window and wait until it is closed.
+
+    Args:
+        application: The configured application.
+
+    Returns:
+        The exit code, 0.
+    """
+    _use_sharp_text_on_windows()
+    root = tk.Tk()
+    MainWindow(root, application, SoundEffects(choose_player()))
+    root.mainloop()
+    return 0
+
+
+def _use_sharp_text_on_windows() -> None:
+    """Ask Windows not to blur the window when the display is scaled."""
+    if sys.platform == "win32":
+        # Older Windows versions lack this call; they keep the default.
+        with contextlib.suppress(AttributeError, OSError):
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
 
 def _play(application: Application, options: argparse.Namespace) -> int:
@@ -104,29 +139,46 @@ def _source(text: str) -> BotSource:
 def parse_arguments(arguments: Sequence[str] | None) -> argparse.Namespace:
     """Read the command-line options; invalid ones exit with code 2.
 
+    Without a command (or with only options) the window is opened.
+
     Args:
         arguments: The command-line arguments; ``None`` uses ``sys.argv``.
 
     Returns:
         The parsed options.
     """
-    parser = argparse.ArgumentParser(prog="bot-arena", description=__doc__)
-    commands = parser.add_subparsers(dest="command", required=True)
-    play = commands.add_parser("play", help="play one match")
-    play.add_argument("blue", help="Blue bot: a built-in name or a .py file")
-    play.add_argument("red", nargs="?", help="Red bot (default: Medium)")
-    play.add_argument("--seed", type=int, help="map seed (default: random)")
-    play.add_argument("--solo", action="store_true", help="play solo")
-    play.add_argument(
+    given = list(sys.argv[1:] if arguments is None else arguments)
+    if not given or (given[0].startswith("-") and given[0] not in HELP):
+        given.insert(0, "gui")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
         "--log-level",
         default="warning",
         choices=[level.name.lower() for level in LogLevel],
         help="how much to write to the log (default: warning)",
     )
-    play.add_argument("--log-file", default=str(PROJECT_FOLDER / "arena.log"))
-    play.add_argument("--database", default=str(PROJECT_FOLDER / "arena.db"))
-    options = parser.parse_args(arguments)
-    if options.solo and options.red is not None:
+    common.add_argument(
+        "--log-file", default=str(PROJECT_FOLDER / "arena.log")
+    )
+    common.add_argument("--database", default=str(PROJECT_FOLDER / "arena.db"))
+    parser = argparse.ArgumentParser(
+        prog="bot-arena",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(
+        "gui", parents=[common], help="open the window (the default)"
+    )
+    play = commands.add_parser(
+        "play", parents=[common], help="play one match in the terminal"
+    )
+    play.add_argument("blue", help="Blue bot: a built-in name or a .py file")
+    play.add_argument("red", nargs="?", help="Red bot (default: Medium)")
+    play.add_argument("--seed", type=int, help="map seed (default: random)")
+    play.add_argument("--solo", action="store_true", help="play solo")
+    options = parser.parse_args(given)
+    if options.command == "play" and options.solo and options.red:
         play.error("a solo match has no Red bot")
     return options
 

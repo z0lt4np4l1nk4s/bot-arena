@@ -21,7 +21,7 @@ SIDE_COLOURS: Final[Mapping[Side, str]] = MappingProxyType(
 BASE_COLOURS: Final[Mapping[Side, str]] = MappingProxyType(
     {Side.BLUE: "#cfdcf7", Side.RED: "#f5d0d0"}
 )
-BACKGROUND: Final = "#1e1f24"
+BACKGROUND: Final = "#e4e0d8"
 FLOOR_COLOUR: Final = "#f4f1ea"
 GRID_COLOUR: Final = "#e2ddd2"
 WALL_COLOUR: Final = "#555555"
@@ -81,7 +81,7 @@ class MapCanvas(tk.Canvas):
                 width // 2,
                 height // 2,
                 text="No match yet",
-                fill=FLOOR_COLOUR,
+                fill=WALL_COLOUR,
                 font=("TkDefaultFont", 14),
                 tags="placeholder",
             )

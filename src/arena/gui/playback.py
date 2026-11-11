@@ -84,11 +84,12 @@ class Playback:
         self.playing = True
 
     def add_turn(self) -> None:
-        """A new turn was played; show it if the viewer was following."""
-        following = self.playing and self.current == self.available
+        """A new turn was played; while playing, a later tick shows it.
+
+        Live turns are shown at the playback speed like a replay, because
+        bots often play much faster than anyone can watch.
+        """
         self.available += 1
-        if following:
-            self.current = self.available
 
     def finish(self) -> None:
         """No more turns will come."""

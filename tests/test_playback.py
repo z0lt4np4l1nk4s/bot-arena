@@ -19,15 +19,29 @@ def recorded(turns: int = 10) -> Playback:
 
 
 class LiveTest(unittest.TestCase):
-    def test_live_match_follows_new_turns(self) -> None:
+    def test_live_turns_are_played_at_playback_speed(self) -> None:
         playback = live(3)
+        self.assertEqual(playback.current, 0)
+        self.assertEqual(
+            [playback.tick() for _ in range(4)], [True, True, True, False]
+        )
         self.assertEqual(playback.current, 3)
 
-    def test_paused_playback_does_not_follow(self) -> None:
+    def test_playing_live_match_waits_for_new_turns(self) -> None:
+        playback = live(1)
+        playback.tick()
+        self.assertFalse(playback.tick())
+        self.assertTrue(playback.playing)
+        playback.add_turn()
+        self.assertTrue(playback.tick())
+        self.assertEqual(playback.current, 2)
+
+    def test_paused_playback_does_not_move(self) -> None:
         playback = live(2)
         playback.toggle()
         playback.add_turn()
-        self.assertEqual((playback.current, playback.available), (2, 3))
+        self.assertFalse(playback.tick())
+        self.assertEqual((playback.current, playback.available), (0, 3))
 
     def test_manual_navigation_pauses(self) -> None:
         for move in ("first", "previous", "next"):
@@ -43,8 +57,10 @@ class LiveTest(unittest.TestCase):
         playback = live(5)
         playback.first()
         playback.last()
+        self.assertEqual(playback.current, 5)
         playback.add_turn()
         self.assertTrue(playback.playing)
+        self.assertTrue(playback.tick())
         self.assertEqual(playback.current, 6)
 
     def test_tick_catches_up_then_waits(self) -> None:
@@ -95,12 +111,14 @@ class RecordedTest(unittest.TestCase):
 
     def test_label_uses_max_turns_until_finished(self) -> None:
         playback = live(47)
+        playback.last()
         self.assertEqual(playback.label, "Turn 47 / 200")
         playback.finish()
         self.assertEqual(playback.label, "Turn 47 / 47")
 
     def test_finish_stops_waiting_for_turns(self) -> None:
         playback = live(3)
+        playback.last()
         playback.finish()
         self.assertFalse(playback.tick())
         self.assertFalse(playback.playing)

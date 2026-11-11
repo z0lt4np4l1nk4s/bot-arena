@@ -9,8 +9,13 @@ from pathlib import Path
 import main
 from arena.application import Application, ApplicationSettings
 from arena.bots.source import BotSource
-from arena.model.state import ModeKind
+from arena.model.state import GameState, ModeKind
 from arena.rules import Rules
+from arena.storage.records import (
+    MatchSummary,
+    RecordedMatch,
+    TurnRecord,
+)
 from arena.storage.repository import InMemoryMatchRepository
 from arena.storage.sqlite_repository import SqliteMatchRepository
 
@@ -24,6 +29,29 @@ class ABot:
     def decide(self, state: BotState) -> Action:
         return Action.wait()
 """
+
+
+class HistoryCheckingObserver:
+    """Looks at the history when it hears that a match finished."""
+
+    def __init__(self, application: Application) -> None:
+        self.application = application
+        self.saved_when_finished: int | None = None
+
+    def on_match_started(
+        self, summary: MatchSummary, initial_state: GameState
+    ) -> None:
+        """Not needed."""
+
+    def on_turn(self, record: TurnRecord) -> None:
+        """Not needed."""
+
+    def on_match_failed(self, message: str) -> None:
+        """Not needed."""
+
+    def on_match_finished(self, match: RecordedMatch, stopped: bool) -> None:
+        matches = self.application.repository.list_matches()
+        self.saved_when_finished = len(matches)
 
 
 class ApplicationTest(unittest.TestCase):
@@ -60,6 +88,19 @@ class ApplicationTest(unittest.TestCase):
         match = runner.run(5)
         self.assertEqual(len(match.turns), 20)
         self.assertEqual(len(self.repository.list_matches()), 1)
+
+    def test_match_is_saved_before_other_observers_hear_the_end(
+        self,
+    ) -> None:
+        observer = HistoryCheckingObserver(self.application)
+        runner = self.application.create_match(
+            ModeKind.DUEL,
+            BotSource.builtin("Medium"),
+            BotSource.builtin("Easy"),
+            observers=[observer],
+        )
+        runner.run(5)
+        self.assertEqual(observer.saved_when_finished, 1)
 
     def test_injected_repository_is_used(self) -> None:
         self.assertIs(self.application.repository, self.repository)
@@ -114,6 +155,23 @@ class CommandLineTest(unittest.TestCase):
         project = Path(main.__file__).resolve().parent.parent
         self.assertEqual(Path(options.database), project / "arena.db")
         self.assertEqual(Path(options.log_file), project / "arena.log")
+
+    def test_no_command_means_window(self) -> None:
+        self.assertEqual(main.parse_arguments([]).command, "gui")
+
+    def test_window_command_accepts_log_level(self) -> None:
+        for arguments in (
+            ["--log-level", "info"],
+            ["gui", "--log-level", "info"],
+        ):
+            with self.subTest(arguments=arguments):
+                options = main.parse_arguments(arguments)
+                self.assertEqual(options.command, "gui")
+                self.assertEqual(options.log_level, "info")
+
+    def test_window_command_accepts_database(self) -> None:
+        options = main.parse_arguments(["--database", "other.db"])
+        self.assertEqual(options.database, "other.db")
 
     def test_main_reports_broken_bot(self) -> None:
         broken = self.folder / "broken.py"

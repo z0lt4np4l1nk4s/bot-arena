@@ -109,10 +109,12 @@ class Application:
             )
             for side, source in sources.items()
         }
+        # The match is saved before anyone else hears that it ended, so a
+        # listener can already find it in the history.
         return MatchRunner(
             game_mode,
             clients,
-            [*observers, StorageObserver(self.repository)],
+            [StorageObserver(self.repository), *observers],
         )
 
     def close(self) -> None:

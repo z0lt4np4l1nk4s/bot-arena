@@ -216,7 +216,7 @@ bot-arena/
   README.md
   requirements.txt
   src/
-    main.py                # entry point; `python src/main.py play Hard Medium` until the GUI
+    main.py                # entry point: opens the window; `python src/main.py play Hard Medium` plays in the terminal
     arena/
       api.py                 # public interface for bot authors
       rules.py               # rules configuration (descriptors)
