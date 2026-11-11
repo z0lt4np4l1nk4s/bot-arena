@@ -20,7 +20,7 @@ from arena.model.side import Side
 from arena.model.state import GameState
 from arena.runtime.bot_process import STARTUP_TIMEOUT_SECONDS, BotReply
 from arena.runtime.clients import BotClient
-from arena.runtime.observers import MatchObserver
+from arena.runtime.observers import MatchObserver, QueueObserver
 from arena.storage.records import MatchSummary, RecordedMatch, TurnRecord
 from arena.utilities.logger import get_logger
 
@@ -46,6 +46,17 @@ class MatchRunner:
         self.mode = mode
         self.clients = dict(clients)
         self.observers = list(observers)
+
+    def run_in_background(self, seed: int) -> "MatchHandle":
+        """Play the match in a background thread.
+
+        Args:
+            seed: The map seed.
+
+        Returns:
+            A handle to stop the match or wait for its result.
+        """
+        return MatchHandle(self, seed)
 
     def run(
         self, seed: int, stop_event: threading.Event | None = None
@@ -185,3 +196,59 @@ class MatchRunner:
                 client.stop()
             except Exception:  # stop the others anyway
                 logger.exception("stopping bot %s failed", client.name)
+
+
+class MatchHandle:
+    """A match running in a background thread.
+
+    The GUI keeps the handle to stop the match or collect its result; the
+    match itself reports progress through its observers.
+    """
+
+    def __init__(self, runner: MatchRunner, seed: int) -> None:
+        """Start the match thread right away.
+
+        Args:
+            runner: The runner to use.
+            seed: The map seed.
+        """
+        self.error: BaseException | None = None
+        self._result: RecordedMatch | None = None
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, args=(runner, seed), name="match", daemon=True
+        )
+        self._thread.start()
+
+    @property
+    def is_running(self) -> bool:
+        """Whether the match thread is still working."""
+        return self._thread.is_alive()
+
+    def stop(self) -> None:
+        """Ask the match to end after the current turn."""
+        self._stop_event.set()
+
+    def join(self, timeout: float | None = None) -> RecordedMatch | None:
+        """Wait for the match to end.
+
+        Args:
+            timeout: The longest wait in seconds; ``None`` waits forever.
+
+        Returns:
+            The recorded match, or ``None`` if it is still running or
+            failed (see :attr:`error`).
+        """
+        self._thread.join(timeout)
+        return None if self._thread.is_alive() else self._result
+
+    def _run(self, runner: MatchRunner, seed: int) -> None:
+        """The thread body: play, and report a failure instead of losing it."""
+        try:
+            self._result = runner.run(seed, self._stop_event)
+        except Exception as error:  # reported to the GUI instead
+            self.error = error
+            logger.exception("the match could not be played")
+            for observer in runner.observers:
+                if isinstance(observer, QueueObserver):
+                    observer.on_match_failed(str(error))
