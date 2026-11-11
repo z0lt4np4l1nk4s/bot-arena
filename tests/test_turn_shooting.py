@@ -2,6 +2,7 @@
 
 import unittest
 
+from arena.engine.modes import Duel
 from arena.engine.turn import resolve_turn
 from arena.model.actions import Action
 from arena.model.geometry import Direction, Position
@@ -163,6 +164,44 @@ class ShootingTest(unittest.TestCase):
         )
         after = play(state, Action.shoot(RIGHT))
         self.assertEqual(after.player(Side.RED).stunned_turns, 2)
+
+
+class ShotEventTest(unittest.TestCase):
+    """Every shot that is fired is recorded, so a viewer can draw it."""
+
+    def shots(self, state: GameState) -> list[tuple[Side, Position]]:
+        """The shooter and the last cell of every shot of the turn."""
+        return [
+            (event.side, event.position)
+            for event in state.events
+            if event.kind is EventKind.SHOT
+        ]
+
+    def test_shot_is_recorded_as_event(self) -> None:
+        after = play(picture(EMPTY, "B........."), Action.shoot(RIGHT))
+        self.assertEqual(self.shots(after), [(Side.BLUE, Position(5, 1))])
+
+    def test_shot_stopped_by_wall_ends_before_wall(self) -> None:
+        after = play(picture(EMPTY, ".B.#......"), Action.shoot(RIGHT))
+        self.assertEqual(self.shots(after), [(Side.BLUE, Position(2, 1))])
+
+    def test_shot_into_adjacent_wall_ends_at_shooter(self) -> None:
+        after = play(picture(EMPTY, ".B#......."), Action.shoot(RIGHT))
+        self.assertEqual(self.shots(after), [(Side.BLUE, Position(1, 1))])
+
+    def test_shot_that_hits_ends_at_the_target(self) -> None:
+        after = play(picture(EMPTY, ".B..R....."), Action.shoot(RIGHT))
+        self.assertEqual(self.shots(after), [(Side.BLUE, Position(4, 1))])
+
+    def test_refused_shot_has_no_shot_event(self) -> None:
+        state = play(picture(EMPTY, ".B......R."), Action.shoot(RIGHT))
+        state = play(state, Action.shoot(RIGHT))
+        self.assertEqual(self.shots(state), [])
+
+    def test_opponent_sees_shot_event(self) -> None:
+        after = play(picture(EMPTY, "B........R"), Action.shoot(RIGHT))
+        view = Duel(RULES).state_for_bot(after, Side.RED)
+        self.assertIn(EventKind.SHOT, [event.kind for event in view.events])
 
 
 if __name__ == "__main__":

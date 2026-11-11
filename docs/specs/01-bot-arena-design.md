@@ -99,6 +99,7 @@ Every action can carry an optional **message** (a string, e.g. `"going for cryst
 - The hit bot **drops all crystals it carries**: they **scatter one per cell onto the nearest free cells** it could walk to (first the four neighbours up, down, left, right, then further out). They never land on a wall, outside the map or under the other bot; if there is no room at all, they stay on the hit bot's cell. **Anyone can pick them up.** In addition, the hit bot is **stunned for 2 turns**, which gives the shooter time to collect them.
 - After shooting there is a **cooldown of 5 turns** before the next shot, whether it hit or not.
 - If both bots shoot in the same turn, both bullets are resolved.
+- Every shot that is fired is recorded as a **shot event** (who shot and the last cell the bullet reached), so both bots and the viewer see it, even when it misses. A shot refused because of the cooldown is not an event.
 
 ### 4.5 Traps
 - `trap(position)` places a trap on **any cell of the map**; it takes the whole turn, so the bot does not move. The target must be walkable, not a base, not a cell with a bot, not a cell that already has a trap, and **at least 2 cells (Manhattan) away from the opponent**, so a trap cannot be dropped at its feet: the owner has to predict where the opponent will go.
@@ -195,7 +196,7 @@ API names: the actions are `Action.move(direction)`, `Action.shoot(direction)`, 
 - `crystals`: positions of the crystals on the ground and the count on each cell
 - `me`: position, how many it carries, delivered, shooting cooldown, trap cooldown, stunned/trapped (remaining turns), free traps, **my active traps** (position and remaining turns)
 - `opponent` (`None` in solo): position, how many it carries, delivered, shooting cooldown, stunned/trapped. **Without its traps.**
-- `events`: what happened in the previous turn (a hit, stepping into a trap and whose it is, dropped crystals)
+- `events`: what happened in the previous turn (a shot, a hit, stepping into a trap and whose it is, dropped crystals)
 - `rules`: the numbers of the game (carrying capacity, bullet range, cooldowns...), so a bot never has to hard-code them
 
 ### 6.3 Built-in bots

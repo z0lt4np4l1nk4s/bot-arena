@@ -113,6 +113,7 @@ class OpponentView:
 class EventKind(Enum):
     """Something notable that happened during a turn."""
 
+    SHOT = "shot"
     HIT = "hit"
     CRYSTALS_DROPPED = "crystals_dropped"
     TRAPPED = "trapped"

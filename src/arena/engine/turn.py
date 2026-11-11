@@ -269,6 +269,20 @@ def _shoot(turn: _Turn, chosen: Mapping[Side, Action]) -> None:
             action.direction,
             turn.rules.bullet_range,
         )
+        hit_index = next(
+            (
+                index
+                for index, cell in enumerate(path)
+                if any(
+                    other is not side and player.position == cell
+                    for other, player in turn.players.items()
+                )
+            ),
+            None,
+        )
+        flown = path if hit_index is None else path[: hit_index + 1]
+        end = flown[-1] if flown else shooter.position
+        turn.events.append(Event(EventKind.SHOT, side, end))
         hits.extend(
             other
             for other, player in turn.players.items()

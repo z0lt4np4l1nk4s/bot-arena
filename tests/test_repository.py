@@ -12,7 +12,7 @@ from pathlib import Path
 
 from arena.errors import SchemaVersionError
 from arena.model.side import Side
-from arena.model.state import ModeKind
+from arena.model.state import EventKind, ModeKind
 from arena.storage.records import RecordedMatch, SoloRecord
 from arena.storage.repository import InMemoryMatchRepository, MatchRepository
 from arena.storage.sqlite_repository import SqliteMatchRepository
@@ -56,6 +56,21 @@ class Contracts:
                 loaded.turns, RECORDED.turns, strict=True
             ):
                 self.assertEqual(saved, original)
+
+        def test_shot_events_survive_saving(self) -> None:
+            match_id = self.repository.save_match(RECORDED)
+            loaded = self.repository.load_match(match_id)
+
+            def shots(match: RecordedMatch) -> list[object]:
+                return [
+                    (record.turn, event)
+                    for record in match.turns
+                    for event in record.state.events
+                    if event.kind is EventKind.SHOT
+                ]
+
+            self.assertNotEqual(shots(RECORDED), [])
+            self.assertEqual(shots(loaded), shots(RECORDED))
 
         def test_ids_increase(self) -> None:
             first = self.repository.save_match(RECORDED)
